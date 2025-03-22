@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E08AEB182D8DA13F00F777EA /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = E08AEB172D8DA13F00F777EA /* MarkdownUI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		E09859BF2D8C7EE4009EA7BC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E08AEB182D8DA13F00F777EA /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = Hackchat;
 			packageProductDependencies = (
+				E08AEB172D8DA13F00F777EA /* MarkdownUI */,
 			);
 			productName = Hackchat;
 			productReference = E09859AD2D8C7EE2009EA7BC /* Hackchat.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = E09859A42D8C7EE2009EA7BC;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E08AEB162D8DA13F00F777EA /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E09859AE2D8C7EE2009EA7BC /* Products */;
 			projectDirPath = "";
@@ -326,6 +335,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -380,6 +390,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Release;
 		};
@@ -591,6 +602,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E08AEB162D8DA13F00F777EA /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E08AEB172D8DA13F00F777EA /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E08AEB162D8DA13F00F777EA /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = E09859A52D8C7EE2009EA7BC /* Project object */;
 }

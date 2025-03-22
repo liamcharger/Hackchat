@@ -1,0 +1,39 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "A free app for hackclubbers to chat with AI models" : {
+
+    },
+    "Custom Instructions" : {
+
+    },
+    "Don't know what Hack Club is? " : {
+
+    },
+    "Generating..." : {
+
+    },
+    "Get Started" : {
+
+    },
+    "Hello, World!" : {
+
+    },
+    "Learn More" : {
+
+    },
+    "Message..." : {
+
+    },
+    "Nothing here yet...send a message to start the chat." : {
+
+    },
+    "The URL couldn't be opened" : {
+
+    },
+    "Welcome to Hackchat!" : {
+
+    }
+  },
+  "version" : "1.0"
+}

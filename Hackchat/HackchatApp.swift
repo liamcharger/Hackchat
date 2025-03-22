@@ -9,9 +9,13 @@ import SwiftUI
 
 @main
 struct HackchatApp: App {
+    @StateObject private var coreDataManager = CoreDataManager.shared
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(\.managedObjectContext,
+                              coreDataManager.persistentContainer.viewContext)
         }
     }
 }

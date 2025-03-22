@@ -8,14 +8,29 @@
 import SwiftUI
 
 struct ContentView: View {
+    @AppStorage("showWelcomeView") private var showWelcomeView = true
+    
+    @State private var isWelcoming = true
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        Group {
+            if isWelcoming {
+                WelcomeView()
+                    .transition(.blurReplace)
+            } else {
+                MainView()
+                    .transition(.blurReplace)
+            }
         }
-        .padding()
+        // We need to use onAppear and onChange for the transition to work properly
+        .onChange(of: showWelcomeView) {
+            withAnimation(.bouncy(duration: 0.9)) {
+                isWelcoming = showWelcomeView
+            }
+        }
+        .onAppear {
+            isWelcoming = showWelcomeView
+        }
     }
 }
 

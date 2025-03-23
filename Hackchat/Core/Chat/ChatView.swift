@@ -88,8 +88,37 @@ struct ChatView: View {
                             VStack(spacing: 2) {
                                 let messages = chatViewModel.chat.messages.array().filter { $0.role != "system" }
                                 ForEach(messages.indices, id: \.self) { index in
+                                    let previousMessage = messages.indices.contains(index - 1) ? messages[index - 1] : nil
                                     let message = messages[index]
+                                    
                                     MessageView(message, geometry: geo)
+                                        .padding(.top, {
+                                            let padding: CGFloat = 4
+                                            
+                                            // If there isn't a message above, then it's the first message and doesn't need any padding
+                                            guard let previousMessage else { return 0 }
+                                            
+                                            guard let previousRole = previousMessage.role else { return padding }
+                                            guard let role = message.role else { return padding }
+                                            
+                                            if previousRole == role {
+                                                // These will not be nil
+                                                guard let timestamp = message.timestamp else { return 0 }
+                                                guard let previousTimestamp = previousMessage.timestamp else { return 0 }
+                                                
+                                                let now = timestamp.timeIntervalSince1970
+                                                let previous = previousTimestamp.timeIntervalSince1970
+                                                
+                                                // Check if the timestamps are close
+                                                let elapsedSeconds = (now - previous)
+                                                if elapsedSeconds < 60 {
+                                                    return 0
+                                                }
+                                            }
+                                            
+                                            // The elapsed seconds are either more than 60 or the messages were sent from different roles
+                                            return padding
+                                        }())
                                 }
                                 if chatViewModel.isResponding {
                                     ProgressView()
@@ -110,7 +139,7 @@ struct ChatView: View {
                 }
                 Divider()
                 HStack {
-                    TextField(chatViewModel.isResponding ? "Generating..." : "Message...", text: $message)
+                    TextField("Message...", text: $message)
                         .focused($isFocused)
                         .padding(.leading, 7)
                         .onSubmit {
@@ -153,7 +182,7 @@ struct ChatView: View {
             isFocused = true
         }
         .sheet(isPresented: $showCustomInstructionsView) {
-            // TODO: create custom instructions view
+            CustomInstructionsView(chat: chatViewModel.chat)
         }
         .navigationBarBackButtonHidden()
     }

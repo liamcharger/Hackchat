@@ -8,8 +8,8 @@
 import Foundation
 
 struct ResponseMessage: Codable, Equatable {
-    var role: String
-    var content: String
+    var role: String?
+    var content: String?
 }
 
 struct Response: Codable {
@@ -19,15 +19,25 @@ struct Response: Codable {
     let model: String
     let object: String
     let system_fingerprint: String
-    let x_groq: XGroq
+    let x_groq: XGroq?
 }
 
 struct MessageChoice: Codable {
-    let finish_reason: String
+    let delta: ResponseMessage?
+    let finish_reason: String?
     let index: Int
-    let message: ResponseMessage
 }
 
 struct XGroq: Codable {
     let id: String
+    let usage: XGroqUsage?
+}
+
+struct XGroqUsage: Codable {
+    let completion_time: Double
+    let completion_tokens: Int
+    let prompt_time: Double
+    let prompt_tokens: Int
+    let total_time: Double
+    let total_tokens: Int
 }

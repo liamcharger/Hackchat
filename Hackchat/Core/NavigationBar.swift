@@ -22,6 +22,7 @@ struct NavigationBar<Content: View>: View {
         HStack {
             items()
         }
+        .frame(maxWidth: .infinity)
         .foregroundStyle(.primary)
         .padding(12)
         .overlay {

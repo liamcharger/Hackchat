@@ -40,6 +40,15 @@ struct MainView: View {
                             } label: {
                                 ChatRowView(chat: chat)
                             }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    // TODO: add confirmation
+                                    coreDataManager.persistentContainer.viewContext.delete(chat)
+                                    coreDataManager.save()
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                     .padding()

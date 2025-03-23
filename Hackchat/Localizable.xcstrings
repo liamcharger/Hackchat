@@ -4,19 +4,22 @@
     "A free app for hackclubbers to chat with AI models" : {
 
     },
+    "Cancel" : {
+
+    },
     "Custom Instructions" : {
+
+    },
+    "Customize how you want the model to respond, or to know about you." : {
+
+    },
+    "Delete" : {
 
     },
     "Don't know what Hack Club is? " : {
 
     },
-    "Generating..." : {
-
-    },
     "Get Started" : {
-
-    },
-    "Hello, World!" : {
 
     },
     "Learn More" : {
@@ -26,6 +29,9 @@
 
     },
     "Nothing here yet...send a message to start the chat." : {
+
+    },
+    "Save" : {
 
     },
     "The URL couldn't be opened" : {

@@ -1,10 +1,19 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@" : {
+
+    },
     "A free app for hackclubbers to chat with AI models" : {
 
     },
+    "Are you sure you want to delete a message? This action cannot be undone." : {
+
+    },
     "Cancel" : {
+
+    },
+    "Chat Name" : {
 
     },
     "Custom Instructions" : {
@@ -19,6 +28,9 @@
     "Don't know what Hack Club is? " : {
 
     },
+    "Edit" : {
+
+    },
     "Get Started" : {
 
     },
@@ -26,6 +38,9 @@
 
     },
     "Message..." : {
+
+    },
+    "Messages cannot be sent" : {
 
     },
     "Nothing here yet...send a message to start the chat." : {
@@ -37,7 +52,21 @@
     "The URL couldn't be opened" : {
 
     },
+    "unknown_error" : {
+      "comment" : "Error message for unknown issues",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There was an error processing your message. Please try again later."
+          }
+        }
+      }
+    },
     "Welcome to Hackchat!" : {
+
+    },
+    "Your internet connection appears to be offline." : {
 
     }
   },

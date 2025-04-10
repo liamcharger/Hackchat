@@ -23,7 +23,7 @@ struct MainView: View {
                     Spacer()
                     NavigationBarButton("square.and.pencil") {
                         let newChat = Chat(context: viewContext)
-                        newChat.name = "My Chat \(Int.random(in: 1...1000))"
+                        newChat.name = "New Chat"
                         newChat.id = UUID()
                         newChat.timestamp = Date()
                         newChat.messages = []
@@ -40,6 +40,7 @@ struct MainView: View {
                             } label: {
                                 ChatRowView(chat: chat)
                             }
+                            .contentShape(.contextMenuPreview, .rect(cornerRadius: 15))
                             .contextMenu {
                                 Button(role: .destructive) {
                                     // TODO: add confirmation
@@ -55,7 +56,8 @@ struct MainView: View {
                 }
             }
             .onAppear {
-                if !hasPaused {
+                // If the app is quit and there is a response being generated in a chat, the said chat's `isResponding` property will be true. The state will be incorrect as any `URLSession`s are cancelled on termination
+                if !hasPaused { // Check if we've already set the chat states the first time this view was rendered
                     for chat in chats {
                         chat.isResponding = false
                     }

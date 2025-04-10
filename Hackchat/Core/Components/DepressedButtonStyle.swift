@@ -22,7 +22,7 @@ struct DepressedButtonStyle: ButtonStyle {
             .animation(.bouncy(duration: 0.3), value: configuration.isPressed)
             .onChange(of: configuration.isPressed) { _, isPressed in
                 if !isPressed {
-                    UIImpactFeedbackGenerator(style: vibrationStyle).impactOccurred()
+                    playHaptic(style: vibrationStyle)
                 }
             }
     }

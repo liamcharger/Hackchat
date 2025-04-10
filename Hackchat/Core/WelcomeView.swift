@@ -15,10 +15,12 @@ struct WelcomeView: View {
     @State private var showMoreError = false
     
     func safeAreaInsets() -> CGFloat {
+#if os(iOS)
         if let window = UIApplication.shared.windows.first {
             let inset = window.safeAreaInsets.top
             return inset
         }
+#endif
         return 0
     }
     
@@ -57,12 +59,15 @@ struct WelcomeView: View {
                 }
                 .onTapGesture {
                     guard let url = URL(string: "https://hackclub.com") else { return }
-                    
+#if os(iOS)
                     if UIApplication.shared.canOpenURL(url) {
                         openURL(url)
                     } else {
                         showMoreError = true
                     }
+#else
+                    openURL(url)
+#endif
                 }
                 .alert("The URL couldn't be opened", isPresented: $showMoreError) {}
             }

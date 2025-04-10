@@ -25,6 +25,7 @@ class ChatViewModel: ObservableObject {
     private var isCancelled: Bool = false
     
     @Published var chat: Chat
+    @Published var error: String?
     
     init(_ chat: Chat) {
         self.chat = chat
@@ -74,11 +75,12 @@ class ChatViewModel: ObservableObject {
             guard let self = self else { return }
             
             if let error = error {
-                print(error.localizedDescription)
+                self.error = error.localizedDescription
                 return
             }
             
             guard let data = data, let jsonString = String(data: data, encoding: .utf8) else {
+                self.error = unknownError()
                 print("Failed to decode response as a string")
                 return
             }
@@ -96,6 +98,7 @@ class ChatViewModel: ObservableObject {
                     
                     DispatchQueue.main.async {
                         guard let first = responseChunk.choices.first else {
+                            self.error = self.unknownError()
                             print("There were no message choices")
                             return
                         }
@@ -107,6 +110,7 @@ class ChatViewModel: ObservableObject {
                         }
                     }
                 } catch {
+                    self.error = unknownError()
                     print("Failed to decode chunk:", error)
                 }
             }
@@ -150,5 +154,9 @@ class ChatViewModel: ObservableObject {
         }
 
         self.coreDataManager.save()
+    }
+    
+    private func unknownError() -> String {
+        return NSLocalizedString("unknown_error", comment: "")
     }
 }

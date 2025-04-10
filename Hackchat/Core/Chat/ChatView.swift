@@ -230,8 +230,13 @@ struct ChatView: View {
                 .padding(12)
             }
         }
-        .onChange(of: chatViewModel.chat.messages.array()) {
+        .onChange(of: chatViewModel.chat.messages.array()) { oldMessages, newMessages in
             scrollToBottom()
+            
+            if newMessages.count <= 2 {
+                // The first messages from both sides have been sent, create a chat name
+                chatViewModel.getChatName()
+            }
         }
         .onAppear {
             // When the user opens the chat for the first time, it should open to the latest message

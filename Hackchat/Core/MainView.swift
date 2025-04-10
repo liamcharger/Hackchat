@@ -12,7 +12,7 @@ struct MainView: View {
     
     @ObservedObject var coreDataManager = CoreDataManager.shared
     
-    @FetchRequest(entity: Chat.entity(), sortDescriptors: [NSSortDescriptor(keyPath: \Chat.timestamp, ascending: true)]) var chats: FetchedResults<Chat>
+    @FetchRequest(entity: Chat.entity(), sortDescriptors: [NSSortDescriptor(keyPath: \Chat.timestamp, ascending: false)]) var chats: FetchedResults<Chat>
     
     @State private var hasPaused = false
     

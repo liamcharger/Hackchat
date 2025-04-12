@@ -14,24 +14,22 @@ struct ChatView: View {
     @ObservedObject private var networkManager = NetworkManager.shared
     @ObservedObject private var coreDataManager = CoreDataManager.shared
     
+    @FetchRequest(entity: Chat.entity(), sortDescriptors: [NSSortDescriptor(keyPath: \Chat.timestamp, ascending: false)]) private var chats: FetchedResults<Chat>
+    
     @State private var message: String = ""
     @State private var chatName: String = ""
     @State private var isEditingName: Bool = false
     @State private var showCustomInstructionsView: Bool = false
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var error: String?
     
     @FocusState private var messageFieldIsFocused: Bool
     @FocusState private var nameFieldIsFocused: Bool
     
-    private let animation: Animation = .smooth(duration: 0.4)
+    private let animation: Animation = .smooth(duration: 0.3)
     
     private func sendMessage() {
         guard !message.isEmpty else { return }
-        
-        if (chatViewModel.chat.messages?.count ?? 0) == 0 {
-            // There aren't any messages yet
-            // TODO: generate a chat name
-        }
         
         chatViewModel.sendMessage(message: message)
         message = ""
@@ -51,9 +49,17 @@ struct ChatView: View {
             }
         }
     }
-    
+    private func startRenaming() {
+        chatName = chatViewModel.chat.name ?? ""
+        playHaptic(style: .medium)
+        nameFieldIsFocused = true
+        withAnimation(animation) {
+            isEditingName = true
+        }
+    }
+
     init(chat: Chat) {
-        self.chatViewModel = ChatViewModel(chat)
+        chatViewModel = ChatViewModel(chat)
     }
     
     var body: some View {
@@ -65,7 +71,14 @@ struct ChatView: View {
                     }
                     Spacer()
                     Menu {
-                        // Add edit button here?
+                        if !isEditingName {
+                            Button {
+                                playHaptic()
+                                startRenaming()
+                            } label: {
+                                Label("Rename", systemImage: "pencil")
+                            }
+                        }
                         Button {
                             playHaptic()
                             showCustomInstructionsView = true
@@ -82,7 +95,7 @@ struct ChatView: View {
                 .foregroundStyle(.primary)
                 .padding(12)
                 .overlay {
-                    Group {
+                    VStack {
                         if isEditingName {
                             TextField("Chat Name", text: $chatName)
                                 .focused($nameFieldIsFocused)
@@ -93,9 +106,29 @@ struct ChatView: View {
                                         .stroke(Material.regular, lineWidth: 1.5)
                                 }
                                 .submitLabel(.done)
+                                .onChange(of: chatName) { _, name in
+                                    if chats.first(where: { ($0.name ?? "") == name }) != nil {
+                                        chatViewModel.error = "A chat with that name already exists."
+                                    } else {
+                                        chatViewModel.error = nil
+                                    }
+                                }
                                 .onSubmit {
+                                    guard !(error ?? "").contains("name already exists") else {
+                                        nameFieldIsFocused = true
+                                        return
+                                    }
+                                            
                                     if chatName.trimmingCharacters(in: .whitespaces).isEmpty {
-                                        chatViewModel.chat.name = "Untitled"
+                                        let untitledString = "Untitled"
+                                        let untitledChats = chats.filter({ ($0.name ?? "").contains(untitledString) })
+                                        
+                                        if untitledChats.count >= 1 {
+                                            // Count up so there isn't more than one
+                                            chatViewModel.chat.name = "\(untitledString) \(untitledChats.count + 1)"
+                                        } else {
+                                            chatViewModel.chat.name = untitledString
+                                        }
                                     } else {
                                         chatViewModel.chat.name = chatName
                                     }
@@ -107,95 +140,95 @@ struct ChatView: View {
                                 }
                         } else {
                             Text(chatViewModel.chat.name ?? "Untitled")
-                                .onLongPressGesture {
-                                    chatName = chatViewModel.chat.name ?? ""
-                                    playHaptic(style: .medium)
-                                    nameFieldIsFocused = true
-                                    withAnimation(animation) {
-                                        isEditingName = true
-                                    }
-                                }
+                                .onLongPressGesture(perform: startRenaming)
+                                .onTapGesture(count: 2, perform: startRenaming)
                         }
                     }
+                    .compositingGroup()
                     .transition(.slide)
                     .fontWeight(.semibold)
                 }
                 Divider()
-                if let messages = chatViewModel.chat.messages, messages.count <= 0 {
-                    VStack(spacing: 10) {
-                        Image(systemName: "circle.slash")
-                            .font(.largeTitle.weight(.medium))
-                        Text("Nothing here yet...send a message to start the chat.")
-                            .font(.title3.weight(.semibold))
-                    }
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.gray)
-                    .frame(maxHeight: .infinity)
-                    // Add some extra space
-                    .padding(20)
-                } else {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(spacing: 2) {
-                                let messages = chatViewModel.chat.messages.array().filter { $0.role != "system" }
-                                ForEach(messages.indices, id: \.self) { index in
-                                    let previousMessage = messages.indices.contains(index - 1) ? messages[index - 1] : nil
-                                    let message = messages[index]
-                                    
-                                    MessageView(message, geometry: geo)
-                                        .padding(.top, {
-                                            let padding: CGFloat = 5
-                                            
-                                            // If there isn't a message above, then it's the first message and doesn't need any padding
-                                            guard let previousMessage else { return 0 }
-                                            
-                                            guard let previousRole = previousMessage.role else { return padding }
-                                            guard let role = message.role else { return padding }
-                                            
-                                            if previousRole == role {
-                                                // These will not be nil
-                                                guard let timestamp = message.timestamp else { return 0 }
-                                                guard let previousTimestamp = previousMessage.timestamp else { return 0 }
+                Group {
+                    if chatViewModel.messages.count <= 0 {
+                        InfoMessageView(title: "Nothing here yet...send a message to start the chat.")
+                    } else {
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                VStack(spacing: 2) {
+                                    let messages = chatViewModel.messages.filter { $0.role != "system" }
+                                    ForEach(messages.indices, id: \.self) { index in
+                                        let previousMessage = messages.indices.contains(index - 1) ? messages[index - 1] : nil
+                                        let message = messages[index]
+                                        
+                                        MessageView(message, geometry: geo)
+                                            .padding(.top, {
+                                                let padding: CGFloat = 5
                                                 
-                                                let now = timestamp.timeIntervalSince1970
-                                                let previous = previousTimestamp.timeIntervalSince1970
+                                                // If there isn't a message above, then it's the first message and doesn't need any padding
+                                                guard let previousMessage else { return 0 }
                                                 
-                                                // Check if the timestamps are close
-                                                let elapsedSeconds = (now - previous)
-                                                if elapsedSeconds < 60 {
-                                                    return 0
+                                                guard let previousRole = previousMessage.role else { return padding }
+                                                guard let role = message.role else { return padding }
+                                                
+                                                if previousRole == role {
+                                                    // These will not be nil
+                                                    guard let timestamp = message.timestamp else { return 0 }
+                                                    guard let previousTimestamp = previousMessage.timestamp else { return 0 }
+                                                    
+                                                    let now = timestamp.timeIntervalSince1970
+                                                    let previous = previousTimestamp.timeIntervalSince1970
+                                                    
+                                                    // Check if the timestamps are close
+                                                    let elapsedSeconds = (now - previous)
+                                                    if elapsedSeconds < 60 {
+                                                        return 0
+                                                    }
                                                 }
-                                            }
-                                            
-                                            // The elapsed seconds are either more than 60 or the messages were sent from different roles
-                                            return padding
-                                        }())
+                                                
+                                                // The elapsed seconds are either more than 60 or the messages were sent from different roles
+                                                return padding
+                                            }())
+                                    }
+                                    if chatViewModel.isResponding {
+                                        ProgressView()
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    // This is the anchor we use to scroll to the bottom of the ScrollView each time a message is sent
+                                    Color.clear
+                                        .frame(height: 1)
+                                        .id("bottom")
                                 }
-                                if chatViewModel.isResponding {
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                // This is the anchor we use to scroll to the bottom of the ScrollView each time a message is sent
-                                Color.clear
-                                    .frame(height: 1)
-                                    .id("bottom")
+                                .frame(maxWidth: .infinity)
+                                .padding()
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                        }
-                        .scrollDismissesKeyboard(.interactively)
-                        .onAppear {
-                            self.scrollProxy = proxy
+                            .scrollDismissesKeyboard(.interactively)
+                            .onAppear {
+                                self.scrollProxy = proxy
+                            }
                         }
                     }
                 }
+                .transition(.slide)
                 Divider()
                 VStack(spacing: 12) {
-                    if let error = chatViewModel.error {
-                        ChatBannerView(Banner(title: "\(error)", icon: "exclamationmark.circle", type: .error))
-                    } else if !networkManager.connected {
-                        ChatBannerView(Banner(title: "Messages cannot be sent", icon: "wifi.slash", subtitle: "Your internet connection appears to be offline."))
+                    Group {
+                        let banner: Banner? = {
+                            if let error {
+                                return Banner(title: "\(error)", icon: "exclamationmark.circle", type: .error)
+                            } else if !networkManager.connected {
+                                return Banner(title: "Messages cannot be sent", icon: "wifi.slash", subtitle: "Your internet connection appears to be offline.")
+                            }
+                            return nil
+                        }()
+                        
+                        if let banner {
+                            ChatBannerView(banner) {
+                                chatViewModel.dismissError()
+                            }
+                        }
                     }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                     HStack {
                         TextField("Message...", text: $message, axis: .vertical)
                             .focused($messageFieldIsFocused)
@@ -230,17 +263,31 @@ struct ChatView: View {
                 .padding(12)
             }
         }
-        .onChange(of: chatViewModel.chat.messages.array()) { oldMessages, newMessages in
+        .onChange(of: chatViewModel.error) { _, error in
+            // Use private property instead of chatViewModel.error so we can set an animation whenever the latter is set
+            withAnimation(animation) {
+                self.error = error
+            }
+        }
+        .onChange(of: chatViewModel.messages) { _, messages in
             scrollToBottom()
             
-            if newMessages.count <= 2 {
+            if messages.count <= 2 {
                 // The first messages from both sides have been sent, create a chat name
                 chatViewModel.getChatName()
             }
         }
         .onAppear {
+            // If the view model reinitializes, set the error state again
+            error = chatViewModel.error
             // When the user opens the chat for the first time, it should open to the latest message
             scrollToBottom(animate: false)
+        }
+        .onDisappear {
+            nameFieldIsFocused = false
+            withAnimation(animation) {
+                isEditingName = false
+            }
         }
         .sheet(isPresented: $showCustomInstructionsView) {
             CustomInstructionsView(chat: chatViewModel.chat)

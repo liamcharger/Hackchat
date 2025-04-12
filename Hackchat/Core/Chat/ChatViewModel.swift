@@ -26,9 +26,12 @@ class ChatViewModel: ObservableObject {
     
     @Published var chat: Chat
     @Published var error: String?
+    @Published var messages = [Message]()
     
     init(_ chat: Chat) {
         self.chat = chat
+        self.error = chat.error
+        self.messages = chat.messages.array()
     }
     
     var isResponding: Bool {
@@ -43,8 +46,9 @@ class ChatViewModel: ObservableObject {
     }
     
     func sendMessage(message: String) {
-        // Cancel any messages that were already sending
+        // Cancel any messages that were already sending and reset any errors
         cancelMessage(setState: false)
+        dismissError()
         chat.isResponding = true
         isCancelled = false
         
@@ -55,6 +59,7 @@ class ChatViewModel: ObservableObject {
         newMessage.role = "user"
         newMessage.timestamp = Date()
         chat.addToMessages(newMessage)
+        messages.append(newMessage)
         
         self.coreDataManager.save()
         
@@ -79,12 +84,12 @@ class ChatViewModel: ObservableObject {
             guard let self = self else { return }
             
             if let error = error {
-                self.error = error.localizedDescription
+                setError(error.localizedDescription)
                 return
             }
             
             guard let data = data, let jsonString = String(data: data, encoding: .utf8) else {
-                self.error = unknownError()
+                setError(unknownError())
                 print("Failed to decode response as a string")
                 return
             }
@@ -100,7 +105,7 @@ class ChatViewModel: ObservableObject {
                     
                     DispatchQueue.main.async {
                         guard let first = responseChunk.choices.first else {
-                            self.error = self.unknownError()
+                            self.setError(self.unknownError())
                             print("There were no message choices")
                             return
                         }
@@ -112,7 +117,7 @@ class ChatViewModel: ObservableObject {
                         }
                     }
                 } catch {
-                    self.error = unknownError()
+                    setError(unknownError())
                     print("Failed to decode chunk:", error)
                 }
             }
@@ -190,6 +195,30 @@ class ChatViewModel: ObservableObject {
         messageTask = nil
     }
     
+    func dismissError() {
+        DispatchQueue.main.async {
+            self.coreDataManager.persistentContainer.viewContext.perform {
+                self.chat.error = nil
+                self.error = nil
+                self.coreDataManager.save()
+            }
+        }
+    }
+    
+    private func setError(_ error: String) {
+        // The error "cancelled" is thrown if the user cancels a request by URLSession, so ignore it
+        guard error != "cancelled" else { return }
+        
+        DispatchQueue.main.async {
+            self.coreDataManager.persistentContainer.viewContext.perform {
+                self.chat.error = error
+                self.error = error
+                self.cancelMessage()
+                self.coreDataManager.save()
+            }
+        }
+    }
+    
     private func setCancelledState() {
         isCancelled = true
         chat.isResponding = false
@@ -199,24 +228,33 @@ class ChatViewModel: ObservableObject {
         guard let content = delta.content else { return }
         guard !self.isCancelled && !content.isEmpty else { return }
 
-        let existingMessage = self.chat.messages.array().first(where: { $0.id == id })
-        
-        // Update the existing message or start a new one
-        if let existingMessage = existingMessage {
-            let currentContent = existingMessage.content ?? ""
-            existingMessage.content = currentContent + content
-        } else {
-            let newMessage = Message(context: self.coreDataManager.persistentContainer.viewContext)
-            newMessage.id = id
-            newMessage.chat = self.chat
-            newMessage.content = delta.content
-            newMessage.role = "assistant"
-            newMessage.timestamp = Date()
-            
-            self.chat.addToMessages(newMessage)
-        }
+        let context = self.coreDataManager.persistentContainer.viewContext
+        context.perform {
+            let existingMessage = self.messages.first(where: { $0.id == id })
 
-        self.coreDataManager.save()
+            if let existingMessage = existingMessage {
+                let currentContent = existingMessage.content ?? ""
+                existingMessage.content = currentContent + content
+                
+                // Also update the UI variable
+                let messageInCollection = self.messages.firstIndex(where: { $0.id == existingMessage.id })
+                if let messageInCollection {
+                    self.messages[messageInCollection] = existingMessage
+                }
+            } else {
+                let newMessage = Message(context: context)
+                newMessage.id = id
+                newMessage.chat = self.chat
+                newMessage.content = content
+                newMessage.role = "assistant"
+                newMessage.timestamp = Date()
+                
+                self.chat.addToMessages(newMessage)
+                self.messages.append(newMessage)
+            }
+            
+            self.coreDataManager.save()
+        }
     }
     
     private func unknownError() -> String {

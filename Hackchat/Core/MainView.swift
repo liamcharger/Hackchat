@@ -15,47 +15,128 @@ struct MainView: View {
     @FetchRequest(entity: Chat.entity(), sortDescriptors: [NSSortDescriptor(keyPath: \Chat.timestamp, ascending: false)]) var chats: FetchedResults<Chat>
     
     @State private var hasPaused = false
+    @State private var isSearching = false
+    @State private var showChatDeleteConfirmation = false
+    @State private var searchText = ""
+    // When deleting a chat via the confirmation dialog, the wrong chat object is captured. Deleting from a state fixes this
+    @State private var selectedChat: Chat?
+    @State private var path: [Chat] = []
+    
+    @FocusState private var isSearchFocused: Bool
+    
+    private let animation: Animation = .smooth(duration: 0.3)
+    private var filteredChats: [Chat] {
+        self.chats
+            .filter {
+                let query = searchText.lowercased().trimmingCharacters(in: .whitespaces)
+                if !query.isEmpty {
+                    guard let name = $0.name?.lowercased() else { return false }
+                    return name.contains(query)
+                }
+                return true
+            }
+    }
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 NavigationBar("Chats") {
-                    Spacer()
-                    NavigationBarButton("square.and.pencil") {
+                    NavigationBarButton(isSearching ? "xmark" : "magnifyingglass", alignment: .leading) {
+                        isSearching.toggle()
+                        isSearchFocused = isSearching
+                    }
+                    .opacity(filteredChats.isEmpty ? 0 : 1)
+                    .animation(animation, value: filteredChats.isEmpty)
+                    NavigationBarButton("square.and.pencil", alignment: .trailing) {
                         let newChat = Chat(context: viewContext)
-                        newChat.name = "New Chat"
+                        let newChatLabel = "New Chat"
+                        let chats = chats.filter({ ($0.name ?? "").contains(newChatLabel) })
+                        
+                        if !chats.isEmpty {
+                            newChat.name = newChatLabel + " \(chats.count + 1)"
+                        } else {
+                            newChat.name = newChatLabel
+                        }
                         newChat.id = UUID()
                         newChat.timestamp = Date()
                         newChat.messages = []
                         
                         coreDataManager.save()
+                        
+                        path.append(newChat)
                     }
                 }
+                if isSearching {
+                    HStack(spacing: 7) {
+                        Image(systemName: "magnifyingglass")
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                        TextField("Search", text: $searchText)
+                            .focused($isSearchFocused)
+                            .submitLabel(searchText.trimmingCharacters(in: .whitespaces).isEmpty ? .return : .search)
+                    }
+                    .padding(10)
+                    .background(Material.thin)
+                    .clipShape(Capsule())
+                    .onTapGesture {
+                        isSearchFocused = true
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+                }
                 Divider()
-                ScrollView {
-                    VStack {
-                        ForEach(chats) { chat in
-                            NavigationLink {
-                                ChatView(chat: chat)
-                            } label: {
-                                ChatRowView(chat: chat)
-                            }
-                            .contentShape(.contextMenuPreview, .rect(cornerRadius: 15))
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    // TODO: add confirmation
-                                    coreDataManager.persistentContainer.viewContext.delete(chat)
-                                    coreDataManager.save()
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+                if filteredChats.isEmpty {
+                    InfoMessageView(title: "No chats found", description: "Start a new chat by tapping the pencil button in the top right corner.")
+                } else {
+                    ScrollView {
+                        VStack {
+                            ForEach(filteredChats) { chat in
+                                NavigationLink(value: chat) {
+                                    ChatRowView(chat: chat)
+                                        .transition(.opacity)
+                                }
+                                .contentShape(.contextMenuPreview, .rect(cornerRadius: 15))
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        selectedChat = chat
+                                        showChatDeleteConfirmation = true
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
+                        .navigationDestination(for: Chat.self) { chat in
+                            ChatView(chat: chat)
+                        }
+                        .padding()
                     }
-                    .padding()
                 }
             }
+            .compositingGroup()
+            .animation(animation, value: isSearching)
+            .transition(.push(from: .top))
+            .confirmationDialog("Delete Chat", isPresented: $showChatDeleteConfirmation, actions: {
+                Button(role: .destructive) {
+                    guard let selectedChat else { return }
+                    
+                    coreDataManager.persistentContainer.viewContext.delete(selectedChat)
+                    coreDataManager.save()
+                } label: {
+                    Text("Delete")
+                }
+            }, message: {
+                Text("Are you sure you want to delete \"\(selectedChat?.name ?? "this chat")\"?")
+            })
             .onAppear {
+                for chat in chats {
+                    if chat.messages.array().isEmpty {
+                        // This deletes the chat when the user creates it and then doesn't use it
+                        viewContext.delete(chat)
+                        coreDataManager.save()
+                    }
+                }
+                
                 // If the app is quit and there is a response being generated in a chat, the said chat's `isResponding` property will be true. The state will be incorrect as any `URLSession`s are cancelled on termination
                 if !hasPaused { // Check if we've already set the chat states the first time this view was rendered
                     for chat in chats {
@@ -75,13 +156,9 @@ struct ChatRowView: View {
     
     var body: some View {
         HStack {
-            VStack(alignment: .leading) {
-                Text(chat.name ?? "Untitled")
-                    .foregroundStyle(Color.primary)
-                    .fontWeight(.bold)
-                Text((chat.timestamp ?? Date()).formatted(.dateTime.day().month().year()))
-                    .foregroundStyle(.gray)
-            }
+            Text(chat.name ?? "Untitled")
+                .foregroundStyle(Color.primary)
+                .fontWeight(.semibold)
             Spacer()
             Image(systemName: "chevron.right")
                 .foregroundColor(.gray)

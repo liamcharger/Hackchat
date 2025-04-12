@@ -7,6 +7,9 @@
     "A free app for hackclubbers to chat with AI models" : {
 
     },
+    "Are you sure you want to delete \"%@\"?" : {
+
+    },
     "Are you sure you want to delete a message? This action cannot be undone." : {
 
     },
@@ -23,6 +26,9 @@
 
     },
     "Delete" : {
+
+    },
+    "Delete Chat" : {
 
     },
     "Don't know what Hack Club is? " : {
@@ -43,10 +49,22 @@
     "Messages cannot be sent" : {
 
     },
+    "No chats found" : {
+
+    },
     "Nothing here yet...send a message to start the chat." : {
 
     },
+    "Rename" : {
+
+    },
     "Save" : {
+
+    },
+    "Search" : {
+
+    },
+    "Start a new chat by tapping the pencil button in the top right corner." : {
 
     },
     "The URL couldn't be opened" : {

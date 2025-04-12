@@ -30,9 +30,11 @@ struct Banner {
 struct ChatBannerView: View {
     let banner: Banner
     let accent: Color
+    let dismiss: (() -> Void)?
     
-    init(_ banner: Banner) {
+    init(_ banner: Banner, dismiss: (() -> Void)? = nil) {
         self.banner = banner
+        self.dismiss = dismiss
         
         var color = Color.orange
         switch banner.type {
@@ -56,6 +58,15 @@ struct ChatBannerView: View {
                 if let subtitle = banner.subtitle {
                     Text(subtitle)
                         .foregroundStyle(accent.opacity(0.9))
+                }
+            }
+            if let dismiss {
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 19, weight: .medium))
                 }
             }
         }

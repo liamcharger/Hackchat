@@ -7,6 +7,12 @@
 
 import SwiftUI
 
+enum NavigationAlignment {
+    case leading
+    case trailing
+    case none
+}
+
 struct NavigationBar<Content: View>: View {
     @Environment(\.managedObjectContext) private var viewContext
 
@@ -19,7 +25,7 @@ struct NavigationBar<Content: View>: View {
     }
 
     var body: some View {
-        HStack {
+        HStack(spacing: 13) {
             items()
         }
         .frame(maxWidth: .infinity)
@@ -34,22 +40,32 @@ struct NavigationBar<Content: View>: View {
 
 struct NavigationBarButton: View {
     let icon: String
+    let alignment: NavigationAlignment
     let action: () -> Void
     
-    init(_ icon: String, action: @escaping () -> Void) {
+    init(_ icon: String, alignment: NavigationAlignment = .none, action: @escaping () -> Void) {
         self.icon = icon
+        self.alignment = alignment
         self.action = action
     }
     
     var body: some View {
-        Button {
-            action()
-        } label: {
-            Image(systemName: icon)
-                .imageScale(.large)
-                .fontWeight(.medium)
+        HStack {
+            if alignment == .trailing {
+                Spacer()
+            }
+            Button {
+                action()
+            } label: {
+                Image(systemName: icon)
+                    .imageScale(.large)
+                    .fontWeight(.medium)
+            }
+            .depressedButtonStyle()
+            if alignment == .leading {
+                Spacer()
+            }
         }
-        .depressedButtonStyle()
     }
 }
 
@@ -64,7 +80,6 @@ struct NavigationBarButton: View {
             
             CoreDataManager.shared.save()
         }
-        Spacer()
         NavigationBarButton("square.and.pencil") {
             let newChat = Chat(context: CoreDataManager.shared.persistentContainer.viewContext)
             newChat.name = "My Chat \(Int.random(in: 1...1000))"

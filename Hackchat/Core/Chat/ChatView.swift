@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import MarkdownUI
 
 struct ChatView: View {
     @Environment(\.dismiss) var dismiss
@@ -20,8 +21,11 @@ struct ChatView: View {
     @State private var chatName: String = ""
     @State private var isEditingName: Bool = false
     @State private var showCustomInstructionsView: Bool = false
+    @State private var showDeleteConfirmation = false
     @State private var scrollProxy: ScrollViewProxy?
     @State private var error: String?
+    @State private var messageToDelete: Message?
+    @State private var messageToEdit: Message?
     
     @FocusState private var messageFieldIsFocused: Bool
     @FocusState private var nameFieldIsFocused: Bool
@@ -56,6 +60,12 @@ struct ChatView: View {
         withAnimation(animation) {
             isEditingName = true
         }
+    }
+    private func startEditingMessage() {
+        guard let messageToEdit else { return }
+        
+        message = messageToEdit.content ?? "No content"
+        messageFieldIsFocused = true
     }
 
     init(chat: Chat) {
@@ -99,7 +109,7 @@ struct ChatView: View {
                         if isEditingName {
                             TextField("Chat Name", text: $chatName)
                                 .focused($nameFieldIsFocused)
-                                .frame(width: isEditingName ? geo.size.width / 2.3 : nil) // Use this expression to animate the width
+                                .frame(width: isEditingName ? geo.size.width / 2.3 : nil)
                                 .padding(8)
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 15)
@@ -123,23 +133,22 @@ struct ChatView: View {
                                         let untitledString = "Untitled"
                                         let untitledChats = chats.filter({ ($0.name ?? "").contains(untitledString) })
                                         
-                                        if untitledChats.count >= 1 {
-                                            // Count up so there isn't more than one
-                                            chatViewModel.chat.name = "\(untitledString) \(untitledChats.count + 1)"
+                                        let count = untitledChats.count
+                                        if count >= 1 {
+                                            let count = count + 1 // Count up one more so there isn't more than one chat with the same number
+                                            chatViewModel.updateChatName("\(untitledString) \(count)")
                                         } else {
-                                            chatViewModel.chat.name = untitledString
+                                            chatViewModel.updateChatName(untitledString)
                                         }
                                     } else {
-                                        chatViewModel.chat.name = chatName
+                                        chatViewModel.updateChatName(chatName)
                                     }
                                     withAnimation(animation) {
                                         isEditingName = false
                                     }
-                                    // FIXME: the new name will not update in the previous view
-                                    coreDataManager.save()
                                 }
                         } else {
-                            Text(chatViewModel.chat.name ?? "Untitled")
+                            Text(chatName)
                                 .onLongPressGesture(perform: startRenaming)
                                 .onTapGesture(count: 2, perform: startRenaming)
                         }
@@ -160,8 +169,32 @@ struct ChatView: View {
                                     ForEach(messages.indices, id: \.self) { index in
                                         let previousMessage = messages.indices.contains(index - 1) ? messages[index - 1] : nil
                                         let message = messages[index]
+                                        let alignment = message.role == "user" ? Alignment.trailing : Alignment.leading
                                         
-                                        MessageView(message, geometry: geo)
+                                        Markdown(message.content ?? " ")
+                                            .padding(9)
+                                            .padding(.horizontal, 3)
+                                            .foregroundColor(message.role == "user" ? .white : .primary)
+                                            .background(message.role == "user" ? AnyShapeStyle(Color.blue) : AnyShapeStyle(Material.ultraThin))
+                                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                                            .frame(maxWidth: geo.size.width / 1.35, alignment: alignment)
+                                            .contextMenu {
+                                                if let role = message.role, role == "user" {
+                                                    Button {
+                                                        messageToEdit = message
+                                                        startEditingMessage()
+                                                    } label: {
+                                                        Label("Edit", systemImage: "pencil")
+                                                    }
+                                                }
+                                                Button(role: .destructive) {
+                                                    messageToDelete = message
+                                                    showDeleteConfirmation = true
+                                                } label: {
+                                                    Label("Delete", systemImage: "trash")
+                                                }
+                                            }
+                                            .frame(maxWidth: .infinity, alignment: alignment)
                                             .padding(.top, {
                                                 let padding: CGFloat = 5
                                                 
@@ -226,9 +259,42 @@ struct ChatView: View {
                             ChatBannerView(banner) {
                                 chatViewModel.dismissError()
                             }
+                        } else if chatViewModel.messages.isEmpty && message.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 3) {
+                                    ForEach(chatViewModel.promptSuggestions, id: \.self) { suggestion in
+                                        Button {
+                                            messageFieldIsFocused = true
+                                            message = suggestion + "."
+                                        } label: {
+                                            Text(suggestion)
+                                                .padding(12)
+                                                .background(Material.ultraThin)
+                                                .foregroundStyle(.white.opacity(0.9))
+                                                .clipShape(.rect(cornerRadius: 15))
+                                                .lineLimit(2)
+                                                .multilineTextAlignment(.leading)
+                                                .frame(width: 260)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 6)
+                            }
+                            .padding(.horizontal, -12)
                         }
                     }
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    if messageToEdit != nil {
+                        // TODO: improve
+                        HStack {
+                            Text("Editing message")
+                            Spacer()
+                            Image(systemName: "xmark")
+                                .onTapGesture {
+                                    messageToEdit = nil
+                                }
+                        }
+                    }
                     HStack {
                         TextField("Message...", text: $message, axis: .vertical)
                             .focused($messageFieldIsFocused)
@@ -237,12 +303,16 @@ struct ChatView: View {
                             .disabled(chatViewModel.isResponding)
                         Button {
                             if chatViewModel.isResponding {
-                                chatViewModel.cancelMessage()
+                                self.chatViewModel.cancelMessage()
+                            } else if let messageToEdit {
+                                self.chatViewModel.editMessage(message, for: messageToEdit)
+                                self.messageToEdit = nil
+                                self.message = ""
                             } else {
-                                sendMessage()
+                                self.sendMessage()
                             }
                         } label: {
-                            Image(systemName: chatViewModel.isResponding ? "stop.fill" : "arrow.up")
+                            Image(systemName: chatViewModel.isResponding ? "stop.fill" : (messageToEdit == nil ? "arrow.up" : "checkmark"))
                                 .fontWeight(.semibold)
                                 .padding(8)
                                 .foregroundStyle(.white.gradient)
@@ -263,21 +333,35 @@ struct ChatView: View {
                 .padding(12)
             }
         }
+        .confirmationDialog("Are you sure you want to delete a message? This action cannot be undone.", isPresented: $showDeleteConfirmation) {
+            Button(role: .destructive) {
+                guard let message = messageToDelete else { return }
+                
+                chatViewModel.deleteMessage(message)
+            } label: {
+                Text("Delete")
+            }
+        }
         .onChange(of: chatViewModel.error) { _, error in
             // Use private property instead of chatViewModel.error so we can set an animation whenever the latter is set
             withAnimation(animation) {
                 self.error = error
             }
         }
+        .onChange(of: chatViewModel.chat) { _, chat in
+            self.chatName = chat.name ?? "Untitled"
+        }
         .onChange(of: chatViewModel.messages) { _, messages in
             scrollToBottom()
             
-            if messages.count <= 2 {
+            // Make sure we haven't already set the name once
+            if !chatViewModel.chat.hasSetGeneratedName && messages.count <= 2 {
                 // The first messages from both sides have been sent, create a chat name
                 chatViewModel.getChatName()
             }
         }
         .onAppear {
+            chatName = chatViewModel.chat.name ?? "Untitled"
             // If the view model reinitializes, set the error state again
             error = chatViewModel.error
             // When the user opens the chat for the first time, it should open to the latest message

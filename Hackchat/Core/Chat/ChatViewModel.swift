@@ -23,6 +23,14 @@ class ChatViewModel: ObservableObject {
     
     private var messageTask: URLSessionDataTask?
     private var isCancelled: Bool = false
+    private let suggestions = [
+        "Recommend a new sci-fi movie with comedic elements",
+        "List some meal ideas for a healthy dinner",
+        "Create me a weekly workout plan for building muscle",
+        "Recommend some Christmas gifts for a 6 year old",
+        "Explain superconductors in simple terms",
+        "Write a poem about Tom Cruise's favorite shoe brand"
+    ]
     
     @Published var chat: Chat
     @Published var error: String?
@@ -31,7 +39,8 @@ class ChatViewModel: ObservableObject {
     init(_ chat: Chat) {
         self.chat = chat
         self.error = chat.error
-        self.messages = chat.messages.array()
+        
+        self.saveMessages()
     }
     
     var isResponding: Bool {
@@ -44,11 +53,16 @@ class ChatViewModel: ObservableObject {
         
         return request
     }
+    var promptSuggestions: [String] {
+        // Return a random selection of three suggestions
+        return Array(suggestions.shuffled()[0..<3])
+    }
     
     func sendMessage(message: String) {
         // Cancel any messages that were already sending and reset any errors
         cancelMessage(setState: false)
         dismissError()
+        setChatEditedState()
         chat.isResponding = true
         isCancelled = false
         
@@ -59,7 +73,7 @@ class ChatViewModel: ObservableObject {
         newMessage.role = "user"
         newMessage.timestamp = Date()
         chat.addToMessages(newMessage)
-        messages.append(newMessage)
+        saveMessages()
         
         self.coreDataManager.save()
         
@@ -168,7 +182,7 @@ class ChatViewModel: ObservableObject {
                         if first.finish_reason == nil, let delta = first.delta {
                             chatName += delta.content ?? ""
                         } else {
-                            self.updateChatName(chatName)
+                            self.updateChatName(chatName, manual: false)
                         }
                     }
                 } catch {
@@ -178,13 +192,39 @@ class ChatViewModel: ObservableObject {
         }.resume()
     }
     
-    func updateChatName(_ name: String) {
+    func updateChatName(_ name: String, manual: Bool = true) {
         DispatchQueue.main.async {
             self.coreDataManager.persistentContainer.viewContext.perform {
                 self.chat.name = name
+                
+                if !manual {
+                    self.chat.hasSetGeneratedName = true
+                }
+                
+                self.setChatEditedState()
                 self.coreDataManager.save()
             }
         }
+    }
+    
+    func deleteMessage(_ message: Message) {
+        DispatchQueue.main.async {
+            self.coreDataManager.persistentContainer.viewContext.perform {
+                self.chat.removeFromMessages(message)
+                self.saveMessages()
+            }
+        }
+    }
+    
+    func editMessage(_ content: String, for message: Message) {
+        guard let index = self.chat.messages.array().firstIndex(of: message) else { return }
+        
+        // Remove all messages after the message to edit, and send the message again
+        let messagesArray = Array(self.chat.messages.array()[..<index])
+        self.chat.messages = NSSet(array: messagesArray)
+        self.coreDataManager.save()
+        self.saveMessages()
+        self.sendMessage(message: content)
     }
     
     func cancelMessage(setState: Bool = true) {
@@ -203,6 +243,12 @@ class ChatViewModel: ObservableObject {
                 self.coreDataManager.save()
             }
         }
+    }
+    
+    private func setChatEditedState() {
+        // This moves the chat to the top of the list
+        self.chat.lastEdited = Date()
+        // We don't need to save the context because everywhere this function is being used already calls it
     }
     
     private func setError(_ error: String) {
@@ -237,7 +283,7 @@ class ChatViewModel: ObservableObject {
                 existingMessage.content = currentContent + content
                 
                 // Also update the UI variable
-                let messageInCollection = self.messages.firstIndex(where: { $0.id == existingMessage.id })
+                let messageInCollection = self.messages.firstIndex(of: existingMessage)
                 if let messageInCollection {
                     self.messages[messageInCollection] = existingMessage
                 }
@@ -250,11 +296,16 @@ class ChatViewModel: ObservableObject {
                 newMessage.timestamp = Date()
                 
                 self.chat.addToMessages(newMessage)
-                self.messages.append(newMessage)
+                self.saveMessages()
             }
             
             self.coreDataManager.save()
         }
+    }
+    
+    private func saveMessages() {
+        self.coreDataManager.save()
+        self.messages = chat.messages.array()
     }
     
     private func unknownError() -> String {

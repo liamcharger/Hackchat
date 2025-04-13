@@ -29,7 +29,6 @@ struct WelcomeView: View {
             VStack(spacing: 18) {
                 Spacer()
                 VStack(spacing: 10) {
-                    // TODO: add logo here
                     Text("Welcome to Hackchat!")
                         .font(.largeTitle.weight(.bold))
                     Text("A free app for hackclubbers to chat with AI models")

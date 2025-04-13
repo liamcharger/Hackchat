@@ -216,15 +216,12 @@ class ChatViewModel: ObservableObject {
         }
     }
     
+    func regenerateResponse(from message: Message) {
+        removeMessagesAndSend(message: message, newMessage: message.content ?? "")
+    }
+    
     func editMessage(_ content: String, for message: Message) {
-        guard let index = self.chat.messages.array().firstIndex(of: message) else { return }
-        
-        // Remove all messages after the message to edit, and send the message again
-        let messagesArray = Array(self.chat.messages.array()[..<index])
-        self.chat.messages = NSSet(array: messagesArray)
-        self.coreDataManager.save()
-        self.saveMessages()
-        self.sendMessage(message: content)
+        removeMessagesAndSend(message: message, newMessage: content)
     }
     
     func cancelMessage(setState: Bool = true) {
@@ -243,6 +240,17 @@ class ChatViewModel: ObservableObject {
                 self.coreDataManager.save()
             }
         }
+    }
+    
+    private func removeMessagesAndSend(message: Message, newMessage: String) {
+        guard let index = self.chat.messages.array().firstIndex(of: message) else { return }
+        
+        // Remove all messages after the message to edit, and send the message again
+        let messagesArray = Array(self.chat.messages.array()[..<index])
+        self.chat.messages = NSSet(array: messagesArray)
+        self.coreDataManager.save()
+        self.saveMessages()
+        self.sendMessage(message: newMessage)
     }
     
     private func setChatEditedState() {

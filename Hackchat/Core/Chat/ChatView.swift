@@ -24,7 +24,7 @@ struct ChatView: View {
     @State private var showDeleteConfirmation = false
     @State private var scrollProxy: ScrollViewProxy?
     @State private var error: String?
-    @State private var messageToDelete: Message?
+    @State private var selectedMessage: Message?
     @State private var messageToEdit: Message?
     
     @FocusState private var messageFieldIsFocused: Bool
@@ -186,9 +186,15 @@ struct ChatView: View {
                                                     } label: {
                                                         Label("Edit", systemImage: "pencil")
                                                     }
+                                                    Button {
+                                                        selectedMessage = message
+                                                        chatViewModel.regenerateResponse(from: selectedMessage!)
+                                                    } label: {
+                                                        Label("Resend", systemImage: "arrow.uturn.forward")
+                                                    }
                                                 }
                                                 Button(role: .destructive) {
-                                                    messageToDelete = message
+                                                    selectedMessage = message
                                                     showDeleteConfirmation = true
                                                 } label: {
                                                     Label("Delete", systemImage: "trash")
@@ -335,7 +341,7 @@ struct ChatView: View {
         }
         .confirmationDialog("Are you sure you want to delete a message? This action cannot be undone.", isPresented: $showDeleteConfirmation) {
             Button(role: .destructive) {
-                guard let message = messageToDelete else { return }
+                guard let message = selectedMessage else { return }
                 
                 chatViewModel.deleteMessage(message)
             } label: {

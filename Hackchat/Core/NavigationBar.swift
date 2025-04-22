@@ -14,19 +14,17 @@ enum NavigationAlignment {
 }
 
 struct NavigationBar<Content: View>: View {
-    @Environment(\.managedObjectContext) private var viewContext
-
     let title: String
-    let items: () -> Content
+    let content: () -> Content
 
-    init(_ title: String, @ViewBuilder navItems: @escaping () -> Content) {
+    init(_ title: String, @ViewBuilder content: @escaping () -> Content) {
         self.title = title
-        self.items = navItems
+        self.content = content
     }
 
     var body: some View {
         HStack(spacing: 13) {
-            items()
+            content()
         }
         .frame(maxWidth: .infinity)
         .foregroundStyle(.primary)

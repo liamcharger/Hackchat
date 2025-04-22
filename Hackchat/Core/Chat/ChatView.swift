@@ -10,10 +10,12 @@ import MarkdownUI
 
 struct ChatView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.managedObjectContext) var viewContext
     
     @ObservedObject private var chatViewModel: ChatViewModel
     @ObservedObject private var networkManager = NetworkManager.shared
     @ObservedObject private var coreDataManager = CoreDataManager.shared
+    @ObservedObject private var mainViewModel = MainViewModel.shared
     
     @FetchRequest(entity: Chat.entity(), sortDescriptors: [NSSortDescriptor(keyPath: \Chat.timestamp, ascending: false)]) private var chats: FetchedResults<Chat>
     
@@ -21,20 +23,27 @@ struct ChatView: View {
     @State private var chatName: String = ""
     @State private var isEditingName: Bool = false
     @State private var showCustomInstructionsView: Bool = false
-    @State private var showDeleteConfirmation = false
+    @State private var showDeleteConfirmation: Bool = false
+    @State private var showSameNameError: Bool = false
     @State private var scrollProxy: ScrollViewProxy?
     @State private var error: String?
     @State private var selectedMessage: Message?
     @State private var messageToEdit: Message?
+    @State private var promptSuggestions = [ChatSuggestion]()
+    @State private var messageFieldHeight: CGFloat = 0
+    @State private var nameFieldHeight: CGFloat = 0
     
     @FocusState private var messageFieldIsFocused: Bool
     @FocusState private var nameFieldIsFocused: Bool
     
     private let animation: Animation = .smooth(duration: 0.3)
+    private let preview: Bool
+    private let isArchived: Bool
     
     private func sendMessage() {
         guard !message.isEmpty else { return }
         
+        scrollToBottom()
         chatViewModel.sendMessage(message: message)
         message = ""
     }
@@ -42,10 +51,11 @@ struct ChatView: View {
         func scroll() {
             scrollProxy?.scrollTo("bottom", anchor: .bottom)
         }
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { // Delay to allow UI update
             // The scroll view will jump without scrolling unless we add this animation closure
             if animate {
-                withAnimation {
+                withAnimation(.smooth) {
                     scroll()
                 }
             } else {
@@ -55,7 +65,7 @@ struct ChatView: View {
     }
     private func startRenaming() {
         chatName = chatViewModel.chat.name ?? ""
-        playHaptic(style: .medium)
+        playHaptic()
         nameFieldIsFocused = true
         withAnimation(animation) {
             isEditingName = true
@@ -64,100 +74,167 @@ struct ChatView: View {
     private func startEditingMessage() {
         guard let messageToEdit else { return }
         
-        message = messageToEdit.content ?? "No content"
+        message = messageToEdit.content ?? ""
         messageFieldIsFocused = true
     }
-
-    init(chat: Chat) {
-        chatViewModel = ChatViewModel(chat)
+    
+    init(_ chat: Chat, preview: Bool = false, isArchived: Bool = false) {
+        self.chatViewModel = ChatViewModel(chat)
+        self.preview = preview
+        self.isArchived = isArchived
     }
     
     var body: some View {
         GeometryReader { geo in
             VStack(spacing: 0) {
-                HStack {
-                    NavigationBarButton("arrow.left") {
-                        dismiss()
-                    }
-                    Spacer()
-                    Menu {
-                        if !isEditingName {
-                            Button {
-                                playHaptic()
-                                startRenaming()
+                if !preview {
+                    HStack(spacing: 16) {
+                        if isArchived {
+                            Button("Cancel") {
+                                dismiss()
+                            }
+                        } else {
+                            NavigationBarButton("arrow.left") { dismiss() }
+                        }
+                        Spacer()
+                        if isArchived {
+                            NavigationBarButton("arrow.uturn.left") {
+                                dismiss()
+                                mainViewModel.archiveChat(chatViewModel.chat)
+                            }
+                            NavigationBarButton("trash") {
+                                dismiss()
+                                // TODO: confirmation
+                                mainViewModel.deleteChat(chatViewModel.chat)
+                            }
+                            .foregroundStyle(.red)
+                        } else {
+                            Menu {
+                                if !isEditingName {
+                                    Button {
+                                        startRenaming()
+                                    } label: {
+                                        Label("Rename", systemImage: "pencil")
+                                    }
+                                }
+                                Button {
+                                    playHaptic()
+                                    showCustomInstructionsView = true
+                                } label: {
+                                    Label("Custom Instructions", systemImage: "hammer")
+                                }
+                                Button {
+                                    playHaptic()
+                                    dismiss()
+                                    mainViewModel.archiveChat(chatViewModel.chat)
+                                } label: {
+                                    Label("Archive", systemImage: "archivebox")
+                                }
+                                Button(role: .destructive) {
+                                    playHaptic()
+                                    dismiss()
+                                    // TODO: confirmation
+                                    mainViewModel.deleteChat(chatViewModel.chat)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             } label: {
-                                Label("Rename", systemImage: "pencil")
+                                Image(systemName: "info.circle")
+                                    .imageScale(.large)
+                                    .fontWeight(.medium)
                             }
                         }
-                        Button {
-                            playHaptic()
-                            showCustomInstructionsView = true
-                        } label: {
-                            Label("Custom Instructions", systemImage: "hammer")
-                        }
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .imageScale(.large)
-                            .fontWeight(.medium)
                     }
-                }
-                .frame(maxWidth: .infinity)
-                .foregroundStyle(.primary)
-                .padding(12)
-                .overlay {
-                    VStack {
-                        if isEditingName {
-                            TextField("Chat Name", text: $chatName)
-                                .focused($nameFieldIsFocused)
-                                .frame(width: isEditingName ? geo.size.width / 2.3 : nil)
-                                .padding(8)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 15)
-                                        .stroke(Material.regular, lineWidth: 1.5)
-                                }
-                                .submitLabel(.done)
-                                .onChange(of: chatName) { _, name in
-                                    if chats.first(where: { ($0.name ?? "") == name }) != nil {
-                                        chatViewModel.error = "A chat with that name already exists."
-                                    } else {
-                                        chatViewModel.error = nil
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(.primary)
+                    .padding(12)
+                    .overlay {
+                        VStack {
+                            if isEditingName {
+                                TextField("Chat Name", text: $chatName)
+                                    .focused($nameFieldIsFocused)
+                                    .frame(width: isEditingName ? geo.size.width / 1.7 : nil)
+                                    .onHeightChange { height in
+                                        self.nameFieldHeight = height
                                     }
-                                }
-                                .onSubmit {
-                                    guard !(error ?? "").contains("name already exists") else {
-                                        nameFieldIsFocused = true
-                                        return
+                                    .padding(8)
+                                    .background(Color(.systemBackground))
+                                    .clipShape(.rect(cornerRadius: 15))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 15)
+                                            .stroke(showSameNameError ? AnyShapeStyle(Color.red) : AnyShapeStyle(Material.regular), lineWidth: 1.5)
                                     }
-                                            
-                                    if chatName.trimmingCharacters(in: .whitespaces).isEmpty {
-                                        let untitledString = "Untitled"
-                                        let untitledChats = chats.filter({ ($0.name ?? "").contains(untitledString) })
-                                        
-                                        let count = untitledChats.count
-                                        if count >= 1 {
-                                            let count = count + 1 // Count up one more so there isn't more than one chat with the same number
-                                            chatViewModel.updateChatName("\(untitledString) \(count)")
-                                        } else {
-                                            chatViewModel.updateChatName(untitledString)
+                                    .submitLabel(.done)
+                                    .onSubmit {
+                                        guard !showSameNameError else {
+                                            // There's already a chat with the inputted name
+                                            // An error will be displayed, so don't do anything
+                                            nameFieldIsFocused = true
+                                            return
                                         }
-                                    } else {
-                                        chatViewModel.updateChatName(chatName)
+                                        
+                                        // TODO: just don't allow empty names
+                                        if chatName.trimmingCharacters(in: .whitespaces).isEmpty {
+                                            let untitledString = "Untitled"
+                                            let untitledChats = chats.filter({ ($0.name ?? "").contains(untitledString) })
+                                            
+                                            let count = untitledChats.count
+                                            if count >= 1 {
+                                                let count = count + 1 // Count up one more so there isn't more than one chat with the same number
+                                                chatViewModel.updateChatName("\(untitledString) \(count)")
+                                            } else {
+                                                chatViewModel.updateChatName(untitledString)
+                                            }
+                                        } else {
+                                            chatViewModel.updateChatName(chatName)
+                                        }
+                                        
+                                        withAnimation(animation) {
+                                            isEditingName = false
+                                        }
                                     }
-                                    withAnimation(animation) {
-                                        isEditingName = false
+                                    .onChange(of: chatName) { _, name in
+                                        withAnimation(animation) {
+                                            showSameNameError = chats.first(where: { ($0.name ?? "") == name && $0.id != chatViewModel.chat.id }) != nil
+                                        }
                                     }
-                                }
-                        } else {
-                            Text(chatName)
-                                .onLongPressGesture(perform: startRenaming)
-                                .onTapGesture(count: 2, perform: startRenaming)
+                                    .background(alignment: .top) {
+                                        VStack(spacing: 0) {
+                                            if showSameNameError {
+                                                Color.clear // Push the banner below the TextField
+                                                    .frame(height: nameFieldHeight)
+                                            }
+                                            Text("There's already another chat with this name")
+                                                .frame(minHeight: 45, alignment: .leading)
+                                        }
+                                        .compositingGroup()
+                                        .frame(width: geo.size.width / 1.7)
+                                        .padding(8)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(.red)
+                                        .background(Color("OpaqueRed"))
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                        .clipShape(
+                                            .rect(
+                                                topLeadingRadius: 15,
+                                                bottomLeadingRadius: 20,
+                                                bottomTrailingRadius: 20,
+                                                topTrailingRadius: 15
+                                            )
+                                        )
+                                        .opacity(showSameNameError ? 1 : 0)
+                                    }
+                            } else {
+                                Text(chatName)
+                                    .onLongPressGesture(perform: startRenaming)
+                                    .onTapGesture(count: 2, perform: startRenaming)
+                            }
                         }
+                        .fontWeight(.semibold)
                     }
-                    .compositingGroup()
-                    .transition(.slide)
-                    .fontWeight(.semibold)
+                    .zIndex(999)
+                    Divider()
                 }
-                Divider()
                 Group {
                     if chatViewModel.messages.count <= 0 {
                         InfoMessageView(title: "Nothing here yet...send a message to start the chat.")
@@ -165,6 +242,20 @@ struct ChatView: View {
                         ScrollViewReader { proxy in
                             ScrollView {
                                 VStack(spacing: 2) {
+                                    VStack(spacing: 10) {
+                                        if !preview && !isArchived {
+                                            Text("Don't share passwords or other sensitive information in this chat.")
+                                                .italic()
+                                        }
+                                        if let timestamp = chatViewModel.chat.timestamp {
+                                            Text(timestamp.formatted())
+                                        }
+                                    }
+                                    .multilineTextAlignment(.center)
+                                    .font(.system(size: 17))
+                                    .foregroundStyle(.gray)
+                                    .padding(.bottom)
+                                    
                                     let messages = chatViewModel.messages.filter { $0.role != "system" }
                                     ForEach(messages.indices, id: \.self) { index in
                                         let previousMessage = messages.indices.contains(index - 1) ? messages[index - 1] : nil
@@ -181,12 +272,16 @@ struct ChatView: View {
                                             .contextMenu {
                                                 if let role = message.role, role == "user" {
                                                     Button {
-                                                        messageToEdit = message
+                                                        playHaptic()
+                                                        withAnimation(animation) {
+                                                            messageToEdit = message
+                                                        }
                                                         startEditingMessage()
                                                     } label: {
                                                         Label("Edit", systemImage: "pencil")
                                                     }
                                                     Button {
+                                                        playHaptic()
                                                         selectedMessage = message
                                                         chatViewModel.regenerateResponse(from: selectedMessage!)
                                                     } label: {
@@ -200,13 +295,17 @@ struct ChatView: View {
                                                     Label("Delete", systemImage: "trash")
                                                 }
                                             }
+                                            // preview: {
+                                            // TODO: complete
+                                            //     Markdown(message.content ?? " ")
+                                            //         .lineLimit(15)
+                                            // }
                                             .frame(maxWidth: .infinity, alignment: alignment)
                                             .padding(.top, {
                                                 let padding: CGFloat = 5
                                                 
                                                 // If there isn't a message above, then it's the first message and doesn't need any padding
                                                 guard let previousMessage else { return 0 }
-                                                
                                                 guard let previousRole = previousMessage.role else { return padding }
                                                 guard let role = message.role else { return padding }
                                                 
@@ -218,14 +317,14 @@ struct ChatView: View {
                                                     let now = timestamp.timeIntervalSince1970
                                                     let previous = previousTimestamp.timeIntervalSince1970
                                                     
-                                                    // Check if the timestamps are close
+                                                    // Don't add padding if the messages are less than a minute apart
                                                     let elapsedSeconds = (now - previous)
                                                     if elapsedSeconds < 60 {
                                                         return 0
                                                     }
                                                 }
                                                 
-                                                // The elapsed seconds are either more than 60 or the messages were sent from different roles
+                                                // If this falls through, the elapsed seconds are either more than 60 or the messages were sent from different roles
                                                 return padding
                                             }())
                                     }
@@ -234,6 +333,7 @@ struct ChatView: View {
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     // This is the anchor we use to scroll to the bottom of the ScrollView each time a message is sent
+                                    // Use this instead of assigning an id to each message because the scroll animations don't work properly
                                     Color.clear
                                         .frame(height: 1)
                                         .id("bottom")
@@ -241,6 +341,7 @@ struct ChatView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding()
                             }
+                            .defaultScrollAnchor(.bottom)
                             .scrollDismissesKeyboard(.interactively)
                             .onAppear {
                                 self.scrollProxy = proxy
@@ -249,131 +350,191 @@ struct ChatView: View {
                     }
                 }
                 .transition(.slide)
-                Divider()
-                VStack(spacing: 12) {
-                    Group {
-                        let banner: Banner? = {
-                            if let error {
-                                return Banner(title: "\(error)", icon: "exclamationmark.circle", type: .error)
-                            } else if !networkManager.connected {
-                                return Banner(title: "Messages cannot be sent", icon: "wifi.slash", subtitle: "Your internet connection appears to be offline.")
-                            }
-                            return nil
-                        }()
-                        
-                        if let banner {
-                            ChatBannerView(banner) {
-                                chatViewModel.dismissError()
-                            }
-                        } else if chatViewModel.messages.isEmpty && message.isEmpty {
+                if !preview && !isArchived {
+                    Divider()
+                    VStack(spacing: 12) {
+                        if chatViewModel.messages.isEmpty && message.isEmpty {
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 3) {
-                                    ForEach(chatViewModel.promptSuggestions, id: \.self) { suggestion in
+                                HStack(spacing: 6) {
+                                    ForEach(promptSuggestions) { suggestion in
                                         Button {
-                                            messageFieldIsFocused = true
-                                            message = suggestion + "."
+                                            playHaptic()
+                                            chatViewModel.sendMessage(message: suggestion.title + " " + suggestion.subtitle + ".")
                                         } label: {
-                                            Text(suggestion)
-                                                .padding(12)
-                                                .background(Material.ultraThin)
-                                                .foregroundStyle(.white.opacity(0.9))
-                                                .clipShape(.rect(cornerRadius: 15))
-                                                .lineLimit(2)
-                                                .multilineTextAlignment(.leading)
-                                                .frame(width: 260)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(suggestion.title)
+                                                    .foregroundStyle(Color.primary)
+                                                    .fontWeight(.semibold)
+                                                Text(suggestion.subtitle)
+                                                    .foregroundStyle(.gray)
+                                            }
+                                            .padding(12)
+                                            .frame(minWidth: 200, alignment: .leading)
+                                            .background(Material.ultraThin)
+                                            .clipShape(.rect(cornerRadius: 15))
+                                            .multilineTextAlignment(.leading)
                                         }
                                     }
                                 }
                                 .padding(.horizontal, 6)
                             }
                             .padding(.horizontal, -12)
+                            .compositingGroup()
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                            .animation(animation, value: chatViewModel.messages.isEmpty && message.isEmpty)
                         }
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    if messageToEdit != nil {
-                        // TODO: improve
-                        HStack {
-                            Text("Editing message")
-                            Spacer()
-                            Image(systemName: "xmark")
-                                .onTapGesture {
-                                    messageToEdit = nil
+                        ZStack(alignment: .bottom) {
+                            VStack(spacing: 0) {
+                                HStack {
+                                    if messageToEdit != nil {
+                                        Text("Editing message")
+                                    } else if let error {
+                                        Text(error)
+                                    }
+                                    Spacer()
+                                    Button {
+                                        withAnimation(animation) {
+                                            chatViewModel.error = nil
+                                            message = ""
+                                            messageToEdit = nil
+                                        }
+                                    } label: {
+                                        Image(systemName: "xmark")
+                                    }
+                                    .buttonStyle(DepressedButtonStyle())
                                 }
-                        }
-                    }
-                    HStack {
-                        TextField("Message...", text: $message, axis: .vertical)
-                            .focused($messageFieldIsFocused)
-                            .lineLimit(5)
-                            .padding(.leading, 7)
-                            .disabled(chatViewModel.isResponding)
-                        Button {
-                            if chatViewModel.isResponding {
-                                self.chatViewModel.cancelMessage()
-                            } else if let messageToEdit {
-                                self.chatViewModel.editMessage(message, for: messageToEdit)
-                                self.messageToEdit = nil
-                                self.message = ""
-                            } else {
-                                self.sendMessage()
-                            }
-                        } label: {
-                            Image(systemName: chatViewModel.isResponding ? "stop.fill" : (messageToEdit == nil ? "arrow.up" : "checkmark"))
                                 .fontWeight(.semibold)
-                                .padding(8)
-                                .foregroundStyle(.white.gradient)
-                                .background(Color.blue.gradient)
-                                .clipShape(Circle())
+                                .padding(12)
+                                if error != nil || messageToEdit != nil {
+                                    Color.clear // Push the banner to the top the TextField
+                                        .frame(height: messageFieldHeight)
+                                        .transition(.move(edge: .bottom))
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .foregroundStyle({
+                                if messageToEdit != nil {
+                                    return Color.blue
+                                } else if error != nil {
+                                    return Color.red
+                                }
+                                return Color.clear
+                            }())
+                            .background({
+                                if messageToEdit != nil {
+                                    return Color("OpaqueBlue")
+                                } else if error != nil {
+                                    return Color("OpaqueRed")
+                                }
+                                return Color.clear
+                            }())
+                            .clipShape(
+                                .rect(
+                                    topLeadingRadius: 15,
+                                    bottomLeadingRadius: 24,
+                                    bottomTrailingRadius: 24,
+                                    topTrailingRadius: 15
+                                )
+                            )
+                            .opacity(messageToEdit != nil || error != nil ? 1 : 0)
+                            HStack {
+                                TextField("Message...", text: $message, axis: .vertical)
+                                    .focused($messageFieldIsFocused)
+                                    .lineLimit(5)
+                                    .padding(.leading, 7)
+                                    .disabled(chatViewModel.isResponding)
+                                    .onChange(of: message) { _, message in
+                                        guard messageToEdit == nil else { return } // Don't save the message we might be editing as a draft
+                                        
+                                        chatViewModel.chat.draft = message // This is saved in onDisappear
+                                    }
+                                Button {
+                                    if chatViewModel.isResponding {
+                                        self.chatViewModel.cancelMessage()
+                                    } else if let messageToEdit {
+                                        self.chatViewModel.editMessage(message, for: messageToEdit)
+                                        self.messageToEdit = nil
+                                        self.message = ""
+                                    } else {
+                                        self.sendMessage()
+                                    }
+                                } label: {
+                                    Image(systemName: chatViewModel.isResponding ? "stop.fill" : (messageToEdit == nil ? "arrow.up" : "checkmark"))
+                                        .fontWeight(.semibold)
+                                        .padding(8)
+                                        .foregroundStyle(.white.gradient)
+                                        .background(Color.blue.gradient)
+                                        .clipShape(Circle())
+                                }
+                                .depressedButtonStyle(0.93)
+                                .disabled(message.isEmpty && !chatViewModel.isResponding)
+                                .opacity((message.isEmpty && !chatViewModel.isResponding) ? 0.5 : 1)
+                            }
+                            .padding(8)
+                            .background(Color("GrayBackground"))
+                            .clipShape(.rect(cornerRadius: 24))
+                            .onTapGesture {
+                                messageFieldIsFocused = true
+                            }
+                            .onHeightChange { height in
+                                self.messageFieldHeight = (height - 16) // Compensate for extra space aroud the frame
+                            }
                         }
-                        .depressedButtonStyle(0.93)
-                        .disabled((message.isEmpty && !chatViewModel.isResponding) || !networkManager.connected)
-                        .opacity(((message.isEmpty && !chatViewModel.isResponding) || !networkManager.connected) ? 0.5 : 1)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
-                    .padding(8)
-                    .background(Material.regular)
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
-                    .onTapGesture {
-                        messageFieldIsFocused = true
-                    }
+                    .padding(12)
+                    .background(Color(.systemBackground))
                 }
-                .padding(12)
             }
+            // TODO: add animation to scroll view
         }
-        .confirmationDialog("Are you sure you want to delete a message? This action cannot be undone.", isPresented: $showDeleteConfirmation) {
+        .compositingGroup()
+        .transition(.move(edge: .top))
+        .ignoresSafeArea(isEditingName ? [.keyboard] : []) // Don't push the message field and/or banners up when we're editing the name
+        .confirmationDialog("Delete Message", isPresented: $showDeleteConfirmation, actions: {
             Button(role: .destructive) {
                 guard let message = selectedMessage else { return }
                 
+                playHaptic()
                 chatViewModel.deleteMessage(message)
             } label: {
                 Text("Delete")
             }
-        }
+        }, message: {
+            Text("Are you sure you want to delete a message? This action cannot be undone.")
+        })
         .onChange(of: chatViewModel.error) { _, error in
             // Use private property instead of chatViewModel.error so we can set an animation whenever the latter is set
             withAnimation(animation) {
                 self.error = error
             }
         }
-        .onChange(of: chatViewModel.chat) { _, chat in
-            self.chatName = chat.name ?? "Untitled"
+        .onChange(of: chatViewModel.chat.name) { _, createdName in
+            self.chatName = createdName ?? "Untitled"
+        }
+        .onChange(of: networkManager.connected) { _, _ in
+            // When the "messages cannot be sent" banner appears, it will cover some messages unless we scroll
+            scrollToBottom()
         }
         .onChange(of: chatViewModel.messages) { _, messages in
+            // Scroll whenever a message is sent
             scrollToBottom()
-            
-            // Make sure we haven't already set the name once
-            if !chatViewModel.chat.hasSetGeneratedName && messages.count <= 2 {
-                // The first messages from both sides have been sent, create a chat name
-                chatViewModel.getChatName()
-            }
         }
         .onAppear {
+            if let draft = chatViewModel.chat.draft {
+                // The user never finished their message
+                message = draft
+            }
+            // Return a random selection of three suggestions
+            promptSuggestions = Array(chatViewModel.suggestions.shuffled()[0..<4])
             chatName = chatViewModel.chat.name ?? "Untitled"
             // If the view model reinitializes, set the error state again
             error = chatViewModel.error
-            // When the user opens the chat for the first time, it should open to the latest message
-            scrollToBottom(animate: false)
         }
         .onDisappear {
+            // FIXME: make sure this is sufficient to save the user's draft, accounting for crashes and force closes
+            coreDataManager.save()
+            // Dismiss all keyboards
             nameFieldIsFocused = false
             withAnimation(animation) {
                 isEditingName = false
@@ -387,5 +548,5 @@ struct ChatView: View {
 }
 
 #Preview {
-    ChatView(chat: Chat(context: CoreDataManager.shared.persistentContainer.viewContext))
+    ChatView(Chat(context: CoreDataManager.shared.persistentContainer.viewContext))
 }

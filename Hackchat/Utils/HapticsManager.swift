@@ -7,6 +7,6 @@
 
 import UIKit
 
-func playHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+func playHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle = .medium) {
     UIImpactFeedbackGenerator(style: style).impactOccurred()
 }

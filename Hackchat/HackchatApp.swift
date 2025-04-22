@@ -9,7 +9,7 @@ import SwiftUI
 
 @main
 struct HackchatApp: App {
-    @StateObject private var coreDataManager = CoreDataManager.shared
+    @ObservedObject private var coreDataManager = CoreDataManager.shared
     // We initalize the object here because NWPathMonitor has a bug where the connection state will always be disconnected
     @ObservedObject private var networkManager = NetworkManager.shared
     

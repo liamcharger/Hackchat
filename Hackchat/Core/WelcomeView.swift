@@ -75,7 +75,7 @@ struct WelcomeView: View {
             Image("orpheus-flag")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(height: 100)
+                .frame(height: 110)
                 .offset(x: 0, y: -safeAreaInsets())
         }
     }

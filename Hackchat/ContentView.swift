@@ -16,12 +16,12 @@ struct ContentView: View {
         Group {
             if isWelcoming {
                 WelcomeView()
-                    .transition(.blurReplace)
             } else {
                 MainView()
-                    .transition(.blurReplace)
             }
         }
+        .compositingGroup()
+        .transition(.blurReplace)
         // We need to use onAppear and onChange for the transition to work properly
         .onChange(of: showWelcomeView) {
             withAnimation(.bouncy(duration: 0.9)) {

@@ -18,18 +18,26 @@ extension Optional where Wrapped == NSSet {
     }
 }
 
+struct ChatSuggestion: Identifiable {
+    var id = UUID()
+    let title: String
+    let subtitle: String
+}
+
 class ChatViewModel: ObservableObject {
     let coreDataManager = CoreDataManager.shared
     
     private var messageTask: URLSessionDataTask?
     private var isCancelled: Bool = false
-    private let suggestions = [
-        "Recommend a new sci-fi movie with comedic elements",
-        "List some meal ideas for a healthy dinner",
-        "Create me a weekly workout plan for building muscle",
-        "Recommend some Christmas gifts for a 6 year old",
-        "Explain superconductors in simple terms",
-        "Write a poem about Tom Cruise's favorite shoe brand"
+    
+    let suggestions = [
+        ChatSuggestion(title: "Recommend a new sci-fi movie", subtitle: "with comedic elements"),
+        ChatSuggestion(title: "List some meal ideas", subtitle: "for a healthy dinner"),
+        ChatSuggestion(title: "Create me a weekly workout plan", subtitle: "designed to build muscle"),
+        ChatSuggestion(title: "Recommend some Christmas gifts", subtitle: "for a 6 year old"),
+        ChatSuggestion(title: "Explain superconductors", subtitle: "in simple terms"),
+        ChatSuggestion(title: "Write a poem", subtitle: "about Sam Altman"),
+        ChatSuggestion(title: "Write an essay", subtitle: "on solving world hunger")
     ]
     
     @Published var chat: Chat
@@ -53,9 +61,9 @@ class ChatViewModel: ObservableObject {
         
         return request
     }
-    var promptSuggestions: [String] {
-        // Return a random selection of three suggestions
-        return Array(suggestions.shuffled()[0..<3])
+    
+    func archiveChat() {
+        
     }
     
     func sendMessage(message: String) {
@@ -74,8 +82,6 @@ class ChatViewModel: ObservableObject {
         newMessage.timestamp = Date()
         chat.addToMessages(newMessage)
         saveMessages()
-        
-        self.coreDataManager.save()
         
         // Add all the previous messages to the request for context
         var messages = [[String: String]]()
@@ -128,6 +134,12 @@ class ChatViewModel: ObservableObject {
                             self.appendStreamingText(delta, id: messageId)
                         } else {
                             self.cancelMessage()
+                            
+                            // Do this in the view model so it can still run if the user exits the chat
+                            if !self.chat.hasSetGeneratedName { // Make sure we haven't already set the name once
+                                // The first messages from both parties have been sent, create a chat name
+                                self.getChatName()
+                            }
                         }
                     }
                 } catch {
@@ -145,7 +157,7 @@ class ChatViewModel: ObservableObject {
         
         // Add all the previous messages to the request for context
         var messages = [[String: String]]()
-        messages.append(["role": "system", "content": "The messages in this chat are messages from another chat that you need to come up with a name for. Output strictly the name of the chat, nothing else."])
+        messages.append(["role": "system", "content": "The messages in this chat are messages from another chat that you need to come up with a name (no longer than four words) for that summarizes the content. Output strictly the name of the chat, nothing else. Don't include quotations and don't use the word \"chat\"."])
         messages.append(contentsOf: chat.messages.array()
             .map { ["role": $0.role ?? "user", "content": $0.content ?? ""] })
         
@@ -193,11 +205,14 @@ class ChatViewModel: ObservableObject {
     }
     
     func updateChatName(_ name: String, manual: Bool = true) {
+        guard name != chat.name else { return } // Ensure the user did made changes
+        
         DispatchQueue.main.async {
             self.coreDataManager.persistentContainer.viewContext.perform {
                 self.chat.name = name
                 
                 if !manual {
+                    print("Set new chat name")
                     self.chat.hasSetGeneratedName = true
                 }
                 
@@ -221,6 +236,9 @@ class ChatViewModel: ObservableObject {
     }
     
     func editMessage(_ content: String, for message: Message) {
+        // Don't send the message if the body hasn't changed
+        guard message.content ?? "" != content else { return }
+        
         removeMessagesAndSend(message: message, newMessage: content)
     }
     
@@ -276,6 +294,7 @@ class ChatViewModel: ObservableObject {
     private func setCancelledState() {
         isCancelled = true
         chat.isResponding = false
+        coreDataManager.save()
     }
     
     private func appendStreamingText(_ delta: ResponseMessage, id: UUID) {
@@ -312,8 +331,8 @@ class ChatViewModel: ObservableObject {
     }
     
     private func saveMessages() {
-        self.coreDataManager.save()
         self.messages = chat.messages.array()
+        self.coreDataManager.save()
     }
     
     private func unknownError() -> String {

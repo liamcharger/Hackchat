@@ -1,10 +1,22 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@" : {
+    "A free app for hackclubbers to chat with AI models" : {
 
     },
-    "A free app for hackclubbers to chat with AI models" : {
+    "Archive" : {
+
+    },
+    "Archive Chat" : {
+
+    },
+    "Archived Chats" : {
+
+    },
+    "Are you sure you want to archive \"%@\"? It can be unarchived by tapping Archived Chats at the bottom of the screen." : {
+
+    },
+    "Are you sure you want to cancel? Any unsaved changes will be lost." : {
 
     },
     "Are you sure you want to delete \"%@\"?" : {
@@ -22,7 +34,7 @@
     "Custom Instructions" : {
 
     },
-    "Customize how you want the model to respond, or to know about you." : {
+    "Customize how you want the model to respond, or what it should know about you." : {
 
     },
     "Delete" : {
@@ -31,7 +43,19 @@
     "Delete Chat" : {
 
     },
+    "Delete Message" : {
+
+    },
+    "Discard" : {
+
+    },
+    "Discard Changes" : {
+
+    },
     "Don't know what Hack Club is? " : {
+
+    },
+    "Don't share passwords or other sensitive information in this chat." : {
 
     },
     "Edit" : {
@@ -49,7 +73,7 @@
     "Message..." : {
 
     },
-    "Messages cannot be sent" : {
+    "No archived chats" : {
 
     },
     "No chats found" : {
@@ -64,6 +88,9 @@
     "Resend" : {
 
     },
+    "Restore" : {
+
+    },
     "Save" : {
 
     },
@@ -74,6 +101,9 @@
 
     },
     "The URL couldn't be opened" : {
+
+    },
+    "There's already another chat with this name" : {
 
     },
     "unknown_error" : {
@@ -90,7 +120,7 @@
     "Welcome to Hackchat!" : {
 
     },
-    "Your internet connection appears to be offline." : {
+    "When you archive a chat, it will show up here." : {
 
     }
   },

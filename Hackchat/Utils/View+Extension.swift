@@ -34,7 +34,7 @@ struct ViewHeightModifier: ViewModifier {
 }
 
 extension View {
-    public func onHeightChange(withPadding padding: CGFloat = 16, perform action: @escaping (CGFloat) -> Void) -> some View {
+    func onHeightChange(withPadding padding: CGFloat = 16, perform action: @escaping (CGFloat) -> Void) -> some View {
         modifier(ViewHeightModifier(with: padding, completion: action))
     }
 }

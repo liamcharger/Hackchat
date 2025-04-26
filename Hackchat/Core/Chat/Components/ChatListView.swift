@@ -8,10 +8,14 @@
 import SwiftUI
 
 struct ChatListView<V: View>: View {
+    @Environment(\.managedObjectContext) var viewContext
+    
     let chats: [Chat]
     let geo: GeometryProxy
     let archived: Bool
     let content: (Chat) -> V
+    
+    @ObservedObject private var mainViewModel = MainViewModel.shared
     
     @State private var selectedChat: Chat?
     
@@ -56,12 +60,14 @@ struct ChatListView<V: View>: View {
                                 }
                                 .foregroundStyle(Color.primary)
                                 .contentShape(.contextMenuPreview, .rect(cornerRadius: 15))
-                                .contextMenu {
-                                    content(chat)
-                                } preview: {
-                                    ChatView(chat, preview: true)
-                                        .frame(width: geo.size.width / 1.1, height: geo.size.height / 1.5)
-                                }
+                                // FIXME: this doesn't compile
+//                                .modifier(ContextPreviewModifer(preview: !chat.messages.array().isEmpty, content: {
+//                                    content(chat)
+//                                }, previewContent: {
+//                                    ChatView(chat, preview: true)
+//                                        .environment(\.managedObjectContext, viewContext)
+//                                        .frame(width: geo.size.width / 1.1, height: geo.size.height / 1.5)
+//                                }))
                             }
                         }
                     }
@@ -73,6 +79,34 @@ struct ChatListView<V: View>: View {
         }
         .sheet(item: $selectedChat) { chat in
             ChatView(chat, isArchived: true)
+        }
+    }
+}
+
+struct ContextPreviewModifer<V: View>: ViewModifier {
+    let preview: Bool
+    let content: V
+    let previewContent: V
+    
+    init(preview: Bool = false, content: @escaping() -> V, previewContent: @escaping() -> V) {
+        self.preview = preview
+        self.content = content()
+        self.previewContent = previewContent()
+    }
+    
+    func body(content: Content) -> some View {
+        if preview {
+            content
+                .contextMenu {
+                    content
+                } preview: {
+                    previewContent
+                }
+        } else {
+            content
+                .contextMenu {
+                    content
+                }
         }
     }
 }

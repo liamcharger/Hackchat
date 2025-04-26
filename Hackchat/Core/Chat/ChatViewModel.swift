@@ -36,7 +36,7 @@ class ChatViewModel: ObservableObject {
         ChatSuggestion(title: "Create me a weekly workout plan", subtitle: "designed to build muscle"),
         ChatSuggestion(title: "Recommend some Christmas gifts", subtitle: "for a 6 year old"),
         ChatSuggestion(title: "Explain superconductors", subtitle: "in simple terms"),
-        ChatSuggestion(title: "Write a poem", subtitle: "about Sam Altman"),
+        ChatSuggestion(title: "Write a poem", subtitle: "about Sam Altman's shoes"),
         ChatSuggestion(title: "Write an essay", subtitle: "on solving world hunger")
     ]
     
@@ -157,7 +157,11 @@ class ChatViewModel: ObservableObject {
         
         // Add all the previous messages to the request for context
         var messages = [[String: String]]()
-        messages.append(["role": "system", "content": "The messages in this chat are messages from another chat that you need to come up with a name (no longer than four words) for that summarizes the content. Output strictly the name of the chat, nothing else. Don't include quotations and don't use the word \"chat\"."])
+        // FIXME: the name is just a response
+        messages.append([
+            "role": "system",
+            "content": "These messages are from another conversation. Summarize them with a short, descriptive name—no more than 4 words. Do not include quotes or the word 'chat'. Return only the name."
+        ])
         messages.append(contentsOf: chat.messages.array()
             .map { ["role": $0.role ?? "user", "content": $0.content ?? ""] })
         
@@ -212,7 +216,6 @@ class ChatViewModel: ObservableObject {
                 self.chat.name = name
                 
                 if !manual {
-                    print("Set new chat name")
                     self.chat.hasSetGeneratedName = true
                 }
                 

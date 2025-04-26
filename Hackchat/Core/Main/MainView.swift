@@ -26,45 +26,41 @@ struct MainView: View {
     @FocusState private var isSearchFocused: Bool
     
     private let animation: Animation = .smooth(duration: 0.3)
-    
-    private func filteredChats(archived: Bool = false) -> [Chat] {
-        self.chats
+    private var filteredChats: [Chat] {
+        return self.chats
             .filter {
                 let query = searchText.lowercased().trimmingCharacters(in: .whitespaces)
                 if !query.isEmpty {
                     guard let name = $0.name?.lowercased() else { return false }
                     let doesMatch = name.contains(query)
-                    // When returning archived chats: include the current chat if it matches the query and is archived. Otherwise, return the chat if it's not archived and matches the query
-                    return archived ? doesMatch && $0.archived : doesMatch
+                    // Include the chat if it matches the query
+                    return doesMatch
                 }
-                // There isn't a search, so just return the full list of chats, filtered accordingly
-                return archived ? $0.archived : !$0.archived
+                // There isn't a search, so just return the full list of chats
+                return true
             }
     }
-    private func chatNumber() -> String {
-        let chatNames = chats.compactMap(\.name)
-        let chatNameCount = chatNames.filter({ $0.contains("New Chat") }).count // Only include the chats that start with "New Chat"
+    private var activeChats: [Chat] {
+        filteredChats.filter { !$0.archived }
+    }
+    
+    private func createNewChat() {
+        let chats = Array(chats)
+        let newChat = Chat(context: viewContext)
         
-        if chatNameCount > 0 {
-            var highestAvailableNum = 0
-            for name in chatNames {
-                if let last = name.split(separator: " ").last, let num = Int(last) {
-                    // Set the highest available number to the greatest current chat number
-                    highestAvailableNum = max(highestAvailableNum, num)
-                } else {
-                    // The chat name is "New Chat", handled in the last return
-                }
-            }
-            // Return the number one higher than others previously used
-            return " \(highestAvailableNum + 1)"
-        }
-        // No existing chats, we can create a chat called "New Chat"
-        return ""
+        newChat.name = "Untitled\(mainViewModel.chatNumber(chats))"
+        newChat.id = UUID()
+        newChat.timestamp = Date()
+        newChat.messages = []
+        
+        coreDataManager.save()
+        
+        mainViewModel.navigationPath.append(newChat)
     }
     private func deleteEmptyChats() {
         for chat in chats {
             // Check lastEdited because we don't want to delete the chat if the user edited the custom instructions/title, or typed a draft
-            if chat.messages.array().isEmpty && chat.lastEdited == nil && chat.draft == nil {
+            if chat.messages.array().isEmpty && chat.lastEdited == nil && chat.draft == nil && !chat.hasSetGeneratedName {
                 // This deletes the chat when the user creates it and then doesn't use it
                 viewContext.delete(chat)
                 coreDataManager.save()
@@ -77,25 +73,17 @@ struct MainView: View {
             GeometryReader { geo in
                 VStack(spacing: 0) {
                     NavigationBar("My Chats") {
-                        NavigationBarButton(isSearching ? "xmark" : "magnifyingglass", alignment: .leading) {
-                            isSearching.toggle()
-                            isSearchFocused = isSearching
-                        }
-                        .opacity((filteredChats().isEmpty && !isSearching) ? 0 : 1)
-                        .animation(animation, value: filteredChats().isEmpty)
+//                        NavigationBarButton(isSearching ? "xmark" : "magnifyingglass", alignment: .leading) {
+//                            isSearching.toggle()
+//                            isSearchFocused = isSearching
+//                        }
+//                        .opacity(activeChats.isEmpty && !isSearching) ? 0 : 1)
+//                        .animation(animation, value: activeChats.isEmpty)
                         NavigationBarButton("square.and.pencil", alignment: .trailing) {
-                            let newChat = Chat(context: viewContext)
-                            newChat.name = "New Chat\(chatNumber())"
-                            newChat.id = UUID()
-                            newChat.timestamp = Date()
-                            newChat.messages = []
-                            
-                            coreDataManager.save()
-                            
-                            mainViewModel.navigationPath.append(newChat)
+                            createNewChat()
                         }
                     }
-                    if isSearching {
+//                    if isSearching {
                         HStack(spacing: 7) {
                             Image(systemName: "magnifyingglass")
                                 .fontWeight(.medium)
@@ -112,13 +100,13 @@ struct MainView: View {
                         }
                         .padding(.horizontal)
                         .padding(.bottom, 8)
-                    }
+//                    }
                     Divider()
-                    if filteredChats().isEmpty {
+                    if activeChats.isEmpty {
                         InfoMessageView(title: "No chats found", description: "Start a new chat by tapping the pencil button in the top right corner.")
                     } else {
                         ScrollView {
-                            ChatListView(chats: filteredChats(), geo: geo) { chat in
+                            ChatListView(chats: activeChats, geo: geo) { chat in
                                 Button {
                                     selectedChat = chat
                                     showChatArchiveConfirmation = true
@@ -137,30 +125,10 @@ struct MainView: View {
                             ChatView(chat)
                         }
                     }
-                    if !filteredChats(archived: true).isEmpty {
+                    if !filteredChats.filter({ $0.archived }).isEmpty {
                         Divider()
                         NavigationLink {
-                            VStack {
-                                if filteredChats(archived: true).isEmpty {
-                                    InfoMessageView(title: "No archived chats", description: "When you archive a chat, it will show up here.")
-                                } else {
-                                    ChatListView(chats: filteredChats(archived: true), geo: geo, archived: true) { chat in
-                                        Button {
-                                            playHaptic()
-                                            mainViewModel.unarchiveChat(chat)
-                                        } label: {
-                                            Label("Restore", systemImage: "arrow.uturn.backward")
-                                        }
-                                        Button(role: .destructive) {
-                                            selectedChat = chat
-                                            showChatDeleteConfirmation = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                }
-                            }
-                            .navigationTitle("Archived Chats")
+                            ArchivedChatsView()
                         } label: {
                             HStack(spacing: 7) {
                                 Image(systemName: "archivebox")
@@ -208,13 +176,9 @@ struct MainView: View {
                     coreDataManager.save()
                     
                     // Always have the view load with a blank chat
-                    let chat = Chat(context: viewContext)
-                    chat.id = UUID()
-                    chat.name = "New Chat\(chatNumber())"
-                    chat.timestamp = Date()
-                    mainViewModel.navigationPath.append(chat)
+                    createNewChat()
                     
-                    self.hasLoadedInitially = true
+                    hasLoadedInitially = true
                 }
                 
                 deleteEmptyChats()

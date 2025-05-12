@@ -8,12 +8,14 @@
 import SwiftUI
 
 struct ChatRowView: View {
-    private let key: String
+    private let chat: Chat
     private let icon: String?
     private let showChevron: Bool
     
-    init(_ key: String, icon: String? = nil, showChevron: Bool = true) {
-        self.key = key
+    @State private var isResponding = false
+    
+    init(_ chat: Chat, icon: String? = nil, showChevron: Bool = true) {
+        self.chat = chat
         self.icon = icon
         self.showChevron = showChevron
     }
@@ -24,10 +26,13 @@ struct ChatRowView: View {
                 Image(systemName: icon)
                     .fontWeight(.medium)
             }
-            Text(key)
+            Text(chat.name ?? "Untitled")
                 .lineLimit(1)
                 .fontWeight(.semibold)
             Spacer()
+//            if isResponding {
+//                ProgressView()
+//            }
             if showChevron {
                 Image(systemName: "chevron.right")
                     .foregroundColor(.gray)
@@ -36,5 +41,8 @@ struct ChatRowView: View {
         .padding(12)
         .background(Material.regular)
         .clipShape(RoundedRectangle(cornerRadius: 15))
+        .onChange(of: chat) { _, chat in
+            self.isResponding = chat.isResponding
+        }
     }
 }

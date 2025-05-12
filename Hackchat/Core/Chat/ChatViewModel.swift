@@ -138,7 +138,8 @@ class ChatViewModel: ObservableObject {
                             // Do this in the view model so it can still run if the user exits the chat
                             if !self.chat.hasSetGeneratedName { // Make sure we haven't already set the name once
                                 // The first messages from both parties have been sent, create a chat name
-                                self.getChatName()
+                                // FIXME: before uncommenting this, we need to fix the response issue
+//                                self.getChatName()
                             }
                         }
                     }
@@ -160,7 +161,7 @@ class ChatViewModel: ObservableObject {
         // FIXME: the name is just a response
         messages.append([
             "role": "system",
-            "content": "These messages are from another conversation. Summarize them with a short, descriptive name—no more than 4 words. Do not include quotes or the word 'chat'. Return only the name."
+            "content": "Review the following messages from another conversation and return a short title that summarizes them. Limit to 4 words, no quotes, no punctuation, and do not include the word 'chat'. Return only the title."
         ])
         messages.append(contentsOf: chat.messages.array()
             .map { ["role": $0.role ?? "user", "content": $0.content ?? ""] })

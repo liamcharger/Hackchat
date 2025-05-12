@@ -49,25 +49,23 @@ struct ChatListView<V: View>: View {
                                         Button {
                                             selectedChat = chat
                                         } label: {
-                                            ChatRowView(chat.name ?? "Untitled", showChevron: false)
+                                            ChatRowView(chat, showChevron: false)
                                         }
                                     } else {
-                                        // This is at the root of the app, it's safe to use NavigationLink here
                                         NavigationLink(value: chat) {
-                                            ChatRowView(chat.name ?? "Untitled")
+                                            ChatRowView(chat)
                                         }
                                     }
                                 }
                                 .foregroundStyle(Color.primary)
                                 .contentShape(.contextMenuPreview, .rect(cornerRadius: 15))
-                                // FIXME: this doesn't compile
-//                                .modifier(ContextPreviewModifer(preview: !chat.messages.array().isEmpty, content: {
-//                                    content(chat)
-//                                }, previewContent: {
-//                                    ChatView(chat, preview: true)
-//                                        .environment(\.managedObjectContext, viewContext)
-//                                        .frame(width: geo.size.width / 1.1, height: geo.size.height / 1.5)
-//                                }))
+                                .contextMenu {
+                                    content(chat)
+                                } preview: {
+                                    ChatView(chat, preview: true)
+                                        .environment(\.managedObjectContext, viewContext)
+                                        .frame(width: geo.size.width / 1.1, height: geo.size.height / 1.5)
+                                }
                             }
                         }
                     }
@@ -79,34 +77,6 @@ struct ChatListView<V: View>: View {
         }
         .sheet(item: $selectedChat) { chat in
             ChatView(chat, isArchived: true)
-        }
-    }
-}
-
-struct ContextPreviewModifer<V: View>: ViewModifier {
-    let preview: Bool
-    let content: V
-    let previewContent: V
-    
-    init(preview: Bool = false, content: @escaping() -> V, previewContent: @escaping() -> V) {
-        self.preview = preview
-        self.content = content()
-        self.previewContent = previewContent()
-    }
-    
-    func body(content: Content) -> some View {
-        if preview {
-            content
-                .contextMenu {
-                    content
-                } preview: {
-                    previewContent
-                }
-        } else {
-            content
-                .contextMenu {
-                    content
-                }
         }
     }
 }

@@ -34,7 +34,7 @@ struct ArchivedChatsView: View {
                 if archivedChats.isEmpty {
                     InfoMessageView(title: "No archived chats", description: "When you archive a chat, it will show up here.")
                 } else {
-                    ChatListView(chats: filteredChats, geo: geo, archived: true) { chat in
+                    ChatListView(chats: archivedChats, geo: geo, archived: true) { chat in
                         Button {
                             playHaptic()
                             mainViewModel.unarchiveChat(chat)

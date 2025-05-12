@@ -15,6 +15,7 @@ struct MainView: View {
     
     @FetchRequest(entity: Chat.entity(), sortDescriptors: [NSSortDescriptor(keyPath: \Chat.lastEdited, ascending: false)]) var chats: FetchedResults<Chat>
     
+    @State private var id: UUID = UUID()
     @State private var hasLoadedInitially = false
     @State private var isSearching = false
     @State private var showChatDeleteConfirmation = false
@@ -140,6 +141,7 @@ struct MainView: View {
                     }
                 }
             }
+            .id(id)
             .compositingGroup()
             .animation(animation, value: isSearching)
             .transition(.push(from: .top))
@@ -168,6 +170,8 @@ struct MainView: View {
                 Text("Are you sure you want to archive \"\(selectedChat?.name ?? "this chat")\"? It can be unarchived by tapping Archived Chats at the bottom of the screen.")
             })
             .onAppear {
+                id = UUID()
+                
                 // If the app is quit and there is a response being generated in a chat, the said chat's `isResponding` property will be true. The state will be incorrect as any `URLSession`s are cancelled on termination
                 if !hasLoadedInitially { // Check if we've already set the chat states the first time this view was rendered
                     for chat in chats {
@@ -184,7 +188,12 @@ struct MainView: View {
                 deleteEmptyChats()
             }
             .onChange(of: mainViewModel.navigationPath) { _, path in
-                deleteEmptyChats()
+                if path.count == 0 {
+                    deleteEmptyChats()
+                }
+            }
+            .onChange(of: Array(chats)) { _, chats in
+                print(chats)
             }
         }
     }
